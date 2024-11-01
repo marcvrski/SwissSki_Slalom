@@ -1,12 +1,13 @@
 import pandas as pd
 import numpy as np
+import contextily as ctx
 from geopy.distance import geodesic
 import matplotlib.pyplot as plt
+import geopandas as gpd
+from shapely.geometry import Point
 
 # Load your data (replace 'file_path' with your actual file path)
 data = pd.read_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Course_Slalom.csv', delimiter=';')
-
-print(data.head())  
 
 # Filter data for Lenzerheide only
 lenzerheide_data = data[data['Venue'] == 'Lenzerheide']
@@ -44,22 +45,24 @@ plt.title('Altitude Profile of the Lenzerheide Slalom Course by Cumulative Dista
 plt.grid(True)
 plt.show()
 
+# Convert latitude and longitude to geospatial points and create GeoDataFrame
+geometry = [Point(xy) for xy in zip(longitude, latitude)]
+gdf = gpd.GeoDataFrame(lenzerheide_data_sorted, geometry=geometry)
 
-import contextily as ctx
+# Set the coordinate reference system to WGS84 (lat/lon) and transform to Web Mercator for map plotting
+gdf = gdf.set_crs(epsg=4326).to_crs(epsg=3857)
 
-# Convert latitude and longitude to the Web Mercator projection (EPSG:3857) for contextily compatibility
-lon_lat = pd.DataFrame({'Longitude': longitude, 'Latitude': latitude})
-lon_lat = lon_lat.to_crs(epsg=3857)
+# Plot the map view with a satellite image background
+fig, ax = plt.subplots(figsize=(10, 6))
+gdf.plot(ax=ax, marker='o', color='green', linestyle='-', label='Slalom Course Path')
 
-# Plot the map view with a satellite image or map background
-plt.figure(figsize=(10, 6))
-plt.plot(lon_lat['Longitude'], lon_lat['Latitude'], marker='o', linestyle='-', color='green')
+# Add contextily basemap (satellite map)
+ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery)
+
 plt.xlabel('Longitude (°)')
 plt.ylabel('Latitude (°)')
 plt.title('Map View of the Lenzerheide Slalom Course')
-
-# Add contextily basemap
-ctx.add_basemap(plt.gca(), source=ctx.providers.Esri.WorldImagery)
-
-plt.grid(True)
+plt.legend()
+# Save the plot as a PNG file
+plt.savefig('lenzerheide_map.png')
 plt.show()
