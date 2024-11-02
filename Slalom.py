@@ -44,7 +44,6 @@ plt.title('Altitude Profile of the Lenzerheide Slalom Course by Cumulative Dista
 plt.grid(True)
 plt.show()
 
-
 import contextily as ctx
 
 # Convert latitude and longitude to the Web Mercator projection (EPSG:3857) for contextily compatibility
