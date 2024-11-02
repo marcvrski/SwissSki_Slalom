@@ -1,7 +1,5 @@
 import pandas as pd
 
-adelboden_data = pd.DataFrame()
-
 # Load the uploaded files with semicolon as the delimiter
 course_slalom_df = pd.read_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Course_Slalom.csv', delimiter=';')
 databank_slalom_df = pd.read_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Databank_Slalom_23-24.csv', delimiter=';')
@@ -38,6 +36,12 @@ databank_long_df['Gate'] = databank_long_df['Gate'].str.replace('Gate ', '').ast
 
 # Rename 'Gate (Nr)' to 'Gate' in course_slalom_df for consistency
 course_slalom_df.rename(columns={'Gate (Nr)': 'Gate'}, inplace=True)
+databank_long_df.to_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/athlete_time_test.csv', index=False, sep=';')  # Save as CSV with semicolon delimiter
+
+print(databank_long_df)  # Display the first few rows of the long-formatted dataframe
+
+
+exit()  # Exit the script to avoid running the next part
 
 # Perform an outer join to ensure no data is dropped
 merged_df = pd.merge(
@@ -46,15 +50,36 @@ merged_df = pd.merge(
     how='outer'
 )
 
-# Save the merged dataframe to a CSV file for download with semicolon as the delimiter
-merged_df.to_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Merged_DF.csv', index=False, sep=';')
+# Save the merged dataframe to a CSV file for download
+merged_df.to_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Merged_DF.csv', index=False, sep=';')  # Save as CSV with semicolon delimiter
+print(merged_df.head())  # Display the first few rows of the merged dataframe
 
-# Filter data for Adelboden only and drop rows with missing Longitude data
-adelboden_data = merged_df[(merged_df['Venue'] == 'Adelboden')]
+#--------------
 
-print(adelboden_data) 
+import pandas as pd
 
-# Save the merged dataframe to a CSV file for download with semicolon as the delimiter
-adelboden_data.to_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Adelboden_DF.csv', index=False, sep=';')
+# Load the data with semicolon as the delimiter
+adelboden_df = pd.read_csv('/mnt/data/Adelboden_DF.csv', delimiter=';')
 
+# Separate the reference athlete (Is Fastest = yes) and the other athlete (Is Fastest = no)
+reference_df = adelboden_df[adelboden_df['Is Fastest?'] == 'yes'].copy()
+other_athlete_df = adelboden_df[adelboden_df['Is Fastest?'] == 'no'].copy()
 
+# Rename the Time columns for clarity before merging
+reference_df.rename(columns={'Time (ms)': 'ref_time'}, inplace=True)
+other_athlete_df.rename(columns={'Time (ms)': 'athlete_2_time'}, inplace=True)
+
+# Perform a simplified merge using only essential columns to match records for each gate
+merged_df = pd.merge(
+    reference_df[['Date', 'Discipline', 'Venue', 'Race (R) or Training (TR)', 'Gate', 'Run', 'ref_time']],
+    other_athlete_df[['Date', 'Discipline', 'Venue', 'Race (R) or Training (TR)', 'Gate', 'Run', 'athlete_2_time']],
+    on=['Date', 'Discipline', 'Venue', 'Race (R) or Training (TR)', 'Gate', 'Run'],
+    how='outer'
+)
+
+# Calculate the absolute and relative time differences
+merged_df['time_difference'] = merged_df['ref_time'] - merged_df['athlete_2_time']
+merged_df['relative_time_difference'] = (merged_df['time_difference'] / merged_df['ref_time']) * 100
+
+# Save the updated DataFrame to a CSV file for download
+merged_df.to_csv('/mnt/data/Merged_Athlete_Times_with_Differences.csv', index=False)
