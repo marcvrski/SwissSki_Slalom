@@ -1,26 +1,33 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize
-from matplotlib.cm import ScalarMappable
 import streamlit as st
+import plotly.graph_objects as go
 
 # Load your data
 data = pd.read_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Merged_Course_and_Athlete_Times_by_Gate.csv', delimiter=';')
 
-# Define the plotting function
+# Define the plotting function with Plotly
 def plot_relative_elevation_profile(data, venue_name, run_number):
     # Filter data for the specified venue and run
-    venue_data = data[(data['Venue'] == venue_name) & (data['Run'] == run_number)].dropna(subset=["Gate-Gate Distance (m)", "Steepness [°]", "relative_time_difference"])
-    
+    venue_data = data[(data['Venue'] == venue_name) & (data['Run'] == run_number)].dropna(subset=["Gate-Gate Distance (m)", "Steepness [°]", "relative_time_difference", "ref_time"])
+
     # Sort by gate order to ensure correct sequence
     venue_data_sorted = venue_data.sort_values(by="Gate")
-    
+
+    # Display the dataset in Streamlit
+    st.dataframe(venue_data_sorted)
+       
     # Extract relevant columns
     gate_gate_distance = venue_data_sorted["Gate-Gate Distance (m)"]
     steepness = venue_data_sorted["Steepness [°]"]
     relative_time_diff = venue_data_sorted["relative_time_difference"]
-    
+    abs_time_diff = venue_data_sorted["time_difference"]
+    ref_time = venue_data_sorted["ref_time"]
+    gate = venue_data_sorted["Gate"]
+    offset = venue_data_sorted["Offset [m]"]    
+    turning_angle = venue_data_sorted["Turning Angle [°]"] 
+
+
     # Calculate relative altitude changes based on steepness
     relative_elevation = [0]  # Starting point is 0 (relative)
     
@@ -36,27 +43,32 @@ def plot_relative_elevation_profile(data, venue_name, run_number):
     # Calculate cumulative distance
     cumulative_distances = [0] + list(gate_gate_distance.cumsum())
     
-    # Normalize the color scale for relative_time_difference
-    norm = Normalize(vmin=relative_time_diff.min(), vmax=relative_time_diff.max())
-    colormap = plt.cm.RdYlGn  # Red to Yellow to Green colormap
+    # Normalize relative_time_difference to 0-1 scale for color gradient
+    normalized_diff = (relative_time_diff - relative_time_diff.min()) / (relative_time_diff.max() - relative_time_diff.min())
+    colors = normalized_diff.apply(lambda x: f'rgba({int((1 - x) * 255)}, {int(x * 255)}, 0, 0.8)')
+
+    # Create Plotly scatter plot
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=cumulative_distances,
+            y=relative_elevation,
+            mode="markers+lines",
+            marker=dict(color=colors, size=10),
+            line=dict(color="lightgray", width=1),
+            text=[f"Gate: {g}<br>Absolute Time Difference: {t:.2f} s<br>Turning Angle: {ta:.2f}°<br>Offset: {o:.2f} m<br>Steepness: {s:.2f}°" for g, t, ta, o, s in zip(gate, abs_time_diff, turning_angle, offset, steepness)],
+            hoverinfo="text"
+        )
+    )
     
-    # Plot the relative elevation profile
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    # Plot each point with color based on relative_time_difference
-    for x, y, color_val in zip(cumulative_distances, relative_elevation, relative_time_diff):
-        ax.plot(x, y, marker='o', color=colormap(norm(color_val)), markersize=8)
-    
-    # Create a colorbar and add it to the plot
-    sm = ScalarMappable(cmap=colormap, norm=norm)
-    sm.set_array([])  # Only needed for ScalarMappable to work with colorbar
-    plt.colorbar(sm, ax=ax, label="Relative Time Difference (%)")
-    
-    # Label the plot
-    ax.set_xlabel('Cumulative Distance (m)')
-    ax.set_ylabel('Relative Elevation (m)')
-    ax.set_title(f'Relative Elevation Profile of {venue_name} Slalom Course (Run {run_number}) by Cumulative Distance')
-    ax.grid(True)
+    # Customize the layout
+    fig.update_layout(
+        title=f"Relative Elevation Profile of {venue_name} Slalom Course (Run {run_number})",
+        xaxis_title="Cumulative Distance (m)",
+        yaxis_title="Relative Elevation (m)",
+        template="plotly_white",
+        showlegend=False
+    )
     
     return fig
 
@@ -73,4 +85,4 @@ run_number = st.selectbox("Select Run Number", [1, 2])
 # Plot and display the relative elevation profile
 if st.button("Generate Plot"):
     fig = plot_relative_elevation_profile(data, selected_venue, run_number)
-    st.pyplot(fig)
+    st.plotly_chart(fig)

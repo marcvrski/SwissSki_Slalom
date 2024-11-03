@@ -64,6 +64,7 @@ merged_df_sorted.to_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Sorted_Athle
 
 print(merged_df_sorted.head())     # Display the first few rows of the merged DataFrame
 
+
 sorted_athlete_df = merged_df_sorted
 course_slalom_df = pd.read_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Course_Slalom.csv', delimiter=';')
 
@@ -82,4 +83,4 @@ merged_course_athlete_df = pd.merge(
 )
 
 # Save the merged DataFrame to a CSV file for download
-merged_course_athlete_df.to_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Merged_Course_and_Athlete_Times_by_Gate.csv', index=False, sep=';')
+merged_course_athlete_df.to_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Merged_Course_and_Athlete_Times_by_Gate.csv', index=False, sep=';') 
