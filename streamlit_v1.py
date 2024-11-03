@@ -4,7 +4,7 @@ import streamlit as st
 import plotly.graph_objects as go
 
 # Load your data
-data = pd.read_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Merged_Course_and_Athlete_Times_by_Gate.csv', delimiter=';')
+#data = pd.read_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Merged_Course_and_Athlete_Times_by_Gate.csv', delimiter=';')
 
 # Define the plotting function with Plotly
 def plot_relative_elevation_profile(data, venue_name, run_number):
@@ -14,9 +14,6 @@ def plot_relative_elevation_profile(data, venue_name, run_number):
     # Sort by gate order to ensure correct sequence
     venue_data_sorted = venue_data.sort_values(by="Gate")
 
-    # Display the dataset in Streamlit
-    st.dataframe(venue_data_sorted)
-       
     # Extract relevant columns
     gate_gate_distance = venue_data_sorted["Gate-Gate Distance (m)"]
     steepness = venue_data_sorted["Steepness [°]"]
@@ -27,6 +24,14 @@ def plot_relative_elevation_profile(data, venue_name, run_number):
     offset = venue_data_sorted["Offset [m]"]    
     turning_angle = venue_data_sorted["Turning Angle [°]"] 
 
+
+# Display additional information in Streamlit
+    st.markdown(f"**Date:** {venue_data_sorted['Date'].iloc[0]}")
+    st.metric(label="Athlete Name (Rev)", value=venue_data_sorted['athlete_name_ref'].iloc[0])
+    st.metric(label="Athlete Name (Compare)", value=venue_data_sorted['athlete_name_athlete_2'].iloc[0])
+
+  # Display the dataset in Streamlit
+    st.dataframe(venue_data_sorted)
 
     # Calculate relative altitude changes based on steepness
     relative_elevation = [0]  # Starting point is 0 (relative)
@@ -75,6 +80,13 @@ def plot_relative_elevation_profile(data, venue_name, run_number):
 # Streamlit app
 st.title("Slalom Course Relative Elevation Profile")
 
+uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+if uploaded_file is not None:
+    data = pd.read_csv(uploaded_file, delimiter=';')
+    st.write("filename:", uploaded_file.name)
+    st.write(data.head())
+
+
 # Dropdown for selecting venue
 venues = data['Venue'].unique()
 selected_venue = st.selectbox("Select a Venue", venues)
@@ -83,6 +95,6 @@ selected_venue = st.selectbox("Select a Venue", venues)
 run_number = st.selectbox("Select Run Number", [1, 2])
 
 # Plot and display the relative elevation profile
-if st.button("Generate Plot"):
+if st.button("Analyse"):
     fig = plot_relative_elevation_profile(data, selected_venue, run_number)
     st.plotly_chart(fig)
