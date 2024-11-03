@@ -2,11 +2,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load the data
-data = pd.read_csv('/mnt/data/Merged_Course_and_Athlete_Times_by_Gate.csv', delimiter=';')
+data = pd.read_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Merged_Course_and_Athlete_Times_by_Gate.csv', delimiter=';')
 
 # Determine the number of gates to divide into segments
 num_gates = data['Gate'].max()
 segment_size = num_gates // 3
+
+print(f"Number of gates: {num_gates}")
 
 # Define the segments based on gate numbers
 top_segment = range(1, segment_size + 1)

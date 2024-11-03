@@ -86,15 +86,16 @@ if uploaded_file is not None:
     st.write("filename:", uploaded_file.name)
     st.write(data.head())
 
+    # Dropdown for selecting venue
+    venues = data['Venue'].unique()
+    selected_venue = st.selectbox("Select a Venue", venues)
 
-# Dropdown for selecting venue
-venues = data['Venue'].unique()
-selected_venue = st.selectbox("Select a Venue", venues)
+    # Dropdown for selecting run
+    run_number = st.selectbox("Select Run Number", [1, 2])
 
-# Dropdown for selecting run
-run_number = st.selectbox("Select Run Number", [1, 2])
+    # Plot and display the relative elevation profile
+    if st.button("Analyse"):
+        fig = plot_relative_elevation_profile(data, selected_venue, run_number)
+        st.plotly_chart(fig)
 
-# Plot and display the relative elevation profile
-if st.button("Analyse"):
-    fig = plot_relative_elevation_profile(data, selected_venue, run_number)
-    st.plotly_chart(fig)
+    st.snow()
