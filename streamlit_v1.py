@@ -80,22 +80,31 @@ def plot_relative_elevation_profile(data, venue_name, run_number):
 # Streamlit app
 st.title("Slalom Course Relative Elevation Profile")
 
-uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
-if uploaded_file is not None:
-    data = pd.read_csv(uploaded_file, delimiter=';')
-    st.write("filename:", uploaded_file.name)
+uploaded_file1 = st.file_uploader("Upload - Databank_Slalom_23-24 - Course Data", type="csv")
+if uploaded_file1 is not None:
+    data = pd.read_csv(uploaded_file1, delimiter=';')
+    st.write("filename:", uploaded_file1.name)
     st.write(data.head())
+    uploaded_file2 = st.file_uploader("Upload - Course_Slalom -  (Athlete Time)", type="csv")
+    if uploaded_file2 is not None:
+        data = pd.read_csv(uploaded_file2, delimiter=';')
+        st.write("filename:", uploaded_file2.name)
+        st.write(data.head())
 
-    # Dropdown for selecting venue
-    venues = data['Venue'].unique()
-    selected_venue = st.selectbox("Select a Venue", venues)
+        if st.button("Data Set Loaded"):
+            st.write("Data set has been successfully loaded.")
 
-    # Dropdown for selecting run
-    run_number = st.selectbox("Select Run Number", [1, 2])
 
-    # Plot and display the relative elevation profile
-    if st.button("Analyse"):
-        fig = plot_relative_elevation_profile(data, selected_venue, run_number)
-        st.plotly_chart(fig)
+        # Dropdown for selecting venue
+        venues = data['Venue'].unique()
+        selected_venue = st.selectbox("Select a Venue", venues)
 
-    st.snow()
+        # Dropdown for selecting run
+        run_number = st.selectbox("Select Run Number", [1, 2])
+
+        # Plot and display the relative elevation profile
+        if st.button("Analyse"):
+            fig = plot_relative_elevation_profile(data, selected_venue, run_number)
+            st.plotly_chart(fig)
+
+    #st.snow()
