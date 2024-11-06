@@ -4,18 +4,20 @@ import streamlit as st
 import plotly.graph_objects as go
 
 def summarize_data(data, venue, run):
+    
+    rev_athlete = data[data['Best'] == st.session_state['athlete_name_ref']]
+    compare_athlete = data[(data['Best'] == st.session_state['athlete_name_athlete_2']) & (data['total time (sec)'].notnull())]
     st.metric(label="Athlete Name (Rev)", value=st.session_state['athlete_name_ref'])
     st.metric(label="Athlete Name (Compare)", value=st.session_state['athlete_name_athlete_2'])
     # Filter data based on venue and run
     
-    rev_time = data[data['Best'] == st.session_state['athlete_name_ref']]
-    compare_time = data[data['Best'] == st.session_state['athlete_name_athlete_2']]
+    st.write("Time (sec):",int(compare_athlete['Total time (sec)'].values[0]))
+    st.write("Total Gates:", int(compare_athlete['Gates (#)'].values[0]))
+    st.write("Start Altitude (m)", int(compare_athlete['Start Altitude (m)'].values[0]))
 
-    print(rev_time)
-    print(compare_time)
-    
+    print(total_gates)  
+
     # Summary statistics for the 'total time (sec)' column
-   
     return 1
 
 # Define the plotting function with Plotly
