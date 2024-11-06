@@ -26,7 +26,7 @@ def plot_relative_elevation_profile(data, venue_name, run_number):
 
 
 # Display additional information in Streamlit
-    st.markdown(f"**Date:** {venue_data_sorted['Date'].iloc[0]}")
+    st.markdown(f"**Date:** {pd.to_datetime(venue_data_sorted['Date'].iloc[0]).strftime('%d.%m.%Y')}")
     st.metric(label="Athlete Name (Rev)", value=venue_data_sorted['athlete_name_ref'].iloc[0])
     st.metric(label="Athlete Name (Compare)", value=venue_data_sorted['athlete_name_athlete_2'].iloc[0])
 
