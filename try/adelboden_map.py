@@ -14,6 +14,11 @@ data = pd.read_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Merged_Course_and
 # Filter data for Adelboden Run 2 only and drop rows with missing Longitude data
 adelboden_data = data[(data['Venue'] == 'Adelboden') & (data['Run'] == 2)].dropna(subset=["Longitude (°)"])
 
+# Drop rows with any NaN values
+adelboden_data = adelboden_data.dropna(subset=["relative_time_difference"])
+
+print(adelboden_data)   
+
 # Sort by gate order
 adelboden_data_sorted = adelboden_data.sort_values(by="Gate")
 
