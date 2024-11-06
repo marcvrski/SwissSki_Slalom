@@ -4,18 +4,31 @@ import streamlit as st
 import plotly.graph_objects as go
 
 def summarize_data(data, venue, run):
-    
     rev_athlete = data[data['Best'] == st.session_state['athlete_name_ref']]
-    compare_athlete = data[(data['Best'] == st.session_state['athlete_name_athlete_2']) & (data['total time (sec)'].notnull())]
-    st.metric(label="Athlete Name (Rev)", value=st.session_state['athlete_name_ref'])
-    st.metric(label="Athlete Name (Compare)", value=st.session_state['athlete_name_athlete_2'])
-    # Filter data based on venue and run
-    
-    st.write("Time (sec):",int(compare_athlete['Total time (sec)'].values[0]))
-    st.write("Total Gates:", int(compare_athlete['Gates (#)'].values[0]))
-    st.write("Start Altitude (m)", int(compare_athlete['Start Altitude (m)'].values[0]))
+    compare_athlete = data[(data['Best'] == st.session_state['athlete_name_athlete_2'])]
+   
+     #Course data
+    st.subheader("Race and Course Details:")
+    st.write("Gates :",rev_athlete['Gates (#)'].values[0])
 
-    print(total_gates)  
+    #rev_athlete
+
+    st.metric(label="Athlete Name (Rev)", value=st.session_state['athlete_name_ref'])
+    st.write("Rev Time (sec):", float(rev_athlete['total time (sec)'].values[0]))
+    
+    #compare_athlete
+    st.metric(label="Athlete Name (Compare)", value=st.session_state['athlete_name_athlete_2'])
+    st.write("Time (sec):", float(compare_athlete['total time (sec)'].values[0]))
+    time_diff = round(float(compare_athlete['total time (sec)'].values[0]) - float(rev_athlete['total time (sec)'].values[0]), 2)
+
+    st.write("Time Difference (sec):", time_diff)
+
+    # Play video if venue is Adelboden and run is 2
+    if venue.lower() == 'adelboden' and run == 1:
+        video_file = '/Users/marcgurber/SwissSki/SwissSki_Slalom/Ramon_Adelboden_7_1_2024.mov'
+        video_bytes = open(video_file, 'rb').read()
+        st.video(video_bytes)
+
 
     # Summary statistics for the 'total time (sec)' column
     return 1
