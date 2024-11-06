@@ -3,10 +3,23 @@ import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
 
-# Load your data
-#data = pd.read_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Merged_Course_and_Athlete_Times_by_Gate.csv', delimiter=';')
+def summarize_data(data, venue, run):
+    st.metric(label="Athlete Name (Rev)", value=st.session_state['athlete_name_ref'])
+    st.metric(label="Athlete Name (Compare)", value=st.session_state['athlete_name_athlete_2'])
+    # Filter data based on venue and run
+    
+    rev_time = data[data['Best'] == st.session_state['athlete_name_ref']]
+    compare_time = data[data['Best'] == st.session_state['athlete_name_athlete_2']]
+
+    print(rev_time)
+    print(compare_time)
+    
+    # Summary statistics for the 'total time (sec)' column
+   
+    return 1
 
 # Define the plotting function with Plotly
+
 def plot_relative_elevation_profile(data, venue_name, run_number):
     # Filter data for the specified venue and run
     venue_data = data[(data['Venue'] == venue_name) & (data['Run'] == run_number)].dropna(subset=["Gate-Gate Distance (m)", "Steepness [°]", "relative_time_difference", "ref_time"])
@@ -24,14 +37,16 @@ def plot_relative_elevation_profile(data, venue_name, run_number):
     offset = venue_data_sorted["Offset [m]"]    
     turning_angle = venue_data_sorted["Turning Angle [°]"] 
 
-
 # Display additional information in Streamlit
     st.markdown(f"**Date:** {pd.to_datetime(venue_data_sorted['Date'].iloc[0]).strftime('%d.%m.%Y')}")
-    st.metric(label="Athlete Name (Rev)", value=venue_data_sorted['athlete_name_ref'].iloc[0])
-    st.metric(label="Athlete Name (Compare)", value=venue_data_sorted['athlete_name_athlete_2'].iloc[0])
+    st.session_state['athlete_name_ref'] = venue_data_sorted['athlete_name_ref'].iloc[0]
+    st.session_state['athlete_name_athlete_2'] = venue_data_sorted['athlete_name_athlete_2'].iloc[0]
+    
+    summarized_data = summarize_data(athlete_data, selected_venue , run_number)
+    #print(summarized_data)  
 
   # Display the dataset in Streamlit
-    st.dataframe(venue_data_sorted)
+    #st.dataframe(venue_data_sorted)
 
     # Calculate relative altitude changes based on steepness
     relative_elevation = [0]  # Starting point is 0 (relative)
@@ -137,7 +152,7 @@ def merge_df(athlete_dataframe,course_slalom_dataframe):
     # Save the sorted DataFrame to a CSV file
     #merged_df_sorted.to_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Sorted_Athlete_Times_by_Venue_and_Gate.csv', index=False, sep=';')  
 
-    print(merged_df_sorted.head())     # Display the first few rows of the merged DataFrame
+    #print(merged_df_sorted.head())     # Display the first few rows of the merged DataFrame
 
     sorted_athlete_df = merged_df_sorted
     #course_slalom_dataframe = pd.read_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Course_Slalom.csv', delimiter=';')
@@ -165,14 +180,14 @@ with st.sidebar:
     uploaded_file1 = st.file_uploader("Upload - Databank_Slalom_23-24  -  (Athlete Time)", type="csv") 
     if uploaded_file1 is not None:
         athlete_data = pd.read_csv(uploaded_file1, delimiter=';')
-        st.write("filename:", uploaded_file1.name)
+        #st.write("filename:", uploaded_file1.name)
         st.write(athlete_data.head())
         
         uploaded_file2 = st.file_uploader("Upload - Course_Slalom - Course Data", type="csv")
         if uploaded_file2 is not None:
             slalom_data = pd.read_csv(uploaded_file2, delimiter=';')
-            st.write("filename:", uploaded_file2.name)
-            #st.write(slalom_data.head())
+            #st.write("filename:", uploaded_file2.name)
+            st.write(slalom_data.head())
 
             # Dropdown for selecting venue
             venues = athlete_data['Venue'].unique()
@@ -182,7 +197,7 @@ with st.sidebar:
             run_number = st.selectbox("Select Run Number", [1, 2])
 
             graph_data = merge_df(athlete_data, slalom_data)
-            
+        
             # Place the 'Analyse' button in the sidebar
             if st.button("Analyse"):
                 st.session_state['analyse'] = True
@@ -192,7 +207,6 @@ with st.sidebar:
 
 # Main window logic for plotting
 if 'analyse' in st.session_state and st.session_state['analyse']:
-    
     fig = plot_relative_elevation_profile(st.session_state['graph_data'], st.session_state['selected_venue'], st.session_state['run_number'])
     st.plotly_chart(fig)
     # Reset the state if needed or allow for re-analysis
