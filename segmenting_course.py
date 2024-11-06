@@ -1,21 +1,19 @@
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
+from scipy.stats import f_oneway
 
 # Load the data
 data = pd.read_csv('/Users/marcgurber/SwissSki/SwissSki_Slalom/Merged_Course_and_Athlete_Times_by_Gate.csv', delimiter=';')
 
-# Determine the number of gates to divide into segments
+# Define the segments based on gate numbers
 num_gates = data['Gate'].max()
 segment_size = num_gates // 3
-
-print(f"Number of gates: {num_gates}")
-
-# Define the segments based on gate numbers
 top_segment = range(1, segment_size + 1)
 middle_segment = range(segment_size + 1, 2 * segment_size + 1)
 bottom_segment = range(2 * segment_size + 1, num_gates + 1)
 
-# Add a new column to categorize each gate into one of the segments
+# Categorize each gate into a segment
 def categorize_segment(gate):
     if gate in top_segment:
         return 'Top'
@@ -27,13 +25,25 @@ def categorize_segment(gate):
 
 data['Segment'] = data['Gate'].apply(categorize_segment)
 
-# Group by segment and calculate average time difference for each segment
-segment_analysis = data.groupby('Segment')['time_difference'].mean().reset_index()
+# Group by Venue, Run, Gate, and Segment to create finer-grained data points
+detailed_segment_analysis = (
+    data.groupby(['Venue', 'Run', 'Gate', 'Segment'])['time_difference']
+    .mean()
+    .reset_index()
+)
 
-# Plotting the average time difference per segment
+# Calculate mean and standard error for each segment
+segment_summary = detailed_segment_analysis.groupby('Segment').agg(
+    mean_time_difference=('time_difference', 'mean'),
+    std_error=('time_difference', lambda x: np.std(x, ddof=1) / np.sqrt(len(x)))
+).reset_index()
+
+# Plotting with standard error
 plt.figure(figsize=(8, 6))
-plt.bar(segment_analysis['Segment'], segment_analysis['time_difference'], color='skyblue')
+plt.bar(segment_summary['Segment'], segment_summary['mean_time_difference'], yerr=segment_summary['std_error'], 
+        capsize=5, color='skyblue', alpha=0.8)
 plt.xlabel('Course Segment')
 plt.ylabel('Average Time Difference (seconds)')
-plt.title('Average Time Loss by Course Segment')
+plt.title('Average Time Loss by Course Segment with Standard Error')
 plt.show()
+
