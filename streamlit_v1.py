@@ -15,55 +15,8 @@ import contextily as ctx
 import geopandas as gpd
 
 
-def adleboden_animation(data):
-    filtered_data = data
-    # Calculate the total duration in seconds
-    total_duration = filtered_data['athlete_2_time'].sum()
-
-    # Assume you want each gate to display for its 'athlete_2_time' in seconds
-    num_frames = len(filtered_data)
-    fps = num_frames / total_duration  # frames per second
-
-    # Normalize relative_time_difference for color mapping
-    norm = Normalize(vmin=filtered_data['relative_time_difference'].min(), vmax=filtered_data['relative_time_difference'].max())
-    cmap = plt.get_cmap('RdYlGn')
-    sm = ScalarMappable(cmap=cmap, norm=norm)
-    colors = sm.to_rgba(filtered_data['relative_time_difference'])
-
-    # Plotting setup
-    fig, ax = plt.subplots()
-    scat = ax.scatter(filtered_data['Longitude (°)'], filtered_data['Latitude (°)'], c=colors, s=100, edgecolor='k', alpha=0.8)
-    ax.set_xlabel('')  # Remove x-axis label
-    ax.set_ylabel('')  # Remove y-axis label
-    ax.set_title('Adelboden Slalom 2024 - Meillard vs Raschner')
-
-    # Remove tick labels
-    ax.set_xticklabels([])
-    ax.set_yticklabels([])
-    ax.tick_params(axis='both', which='both', length=0)  # Hide ticks
-
-    # Remove the border (spines)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-
-    # Red dot and time annotation
-    red_dot, = ax.plot([], [], 'ro', markersize=10)
-    time_text = ax.text(0.02, 0.95, '', transform=ax.transAxes)
-
-    def update(frame):
-        red_dot.set_data([filtered_data['Longitude (°)'].iloc[frame]], [filtered_data['Latitude (°)'].iloc[frame]])
-        time_info = f"Gate: {filtered_data['Gate'].iloc[frame]}, Time Difference: {filtered_data['time_difference'].iloc[frame]:.2f}s"
-        time_text.set_text(time_info)
-        time_text.set_position((0.98, 0.02))  # Set position to bottom right
-        time_text.set_ha('right')  # Align text to the right
-        return red_dot, time_text
-
-    # Animation setup
-    ani = FuncAnimation(fig, update, frames=num_frames, init_func=lambda: (red_dot, time_text), blit=True)
-
-    # Saving the animation
-    Writer = FFMpegWriter(fps=fps, metadata=dict(artist='Me'), codec='libx264')
-    ani.save('Adelboden_Animation_new.mp4', writer=Writer)
+def adelboden_animation():
+    return 1
 
 def summarize_data(data, venue, run):
     rev_athlete = data[data['Best'] == st.session_state['athlete_name_ref']]
@@ -559,12 +512,28 @@ if st.session_state.get('analyse') == "analyse":
     if selected_venue.lower() == 'adelboden' and run_number == 2:
         venue_data_sorted = graph_data[(graph_data['Venue'] == selected_venue)].sort_values(by="Gate")
         adelboden_plot_course_map(venue_data_sorted)
+        adelboden_animation()
         # Video file uploader
         with st.expander("Upload Race Video", expanded=True):
             uploaded_video = st.file_uploader("Upload - Race Video", type=["mp4", "mov", "avi"], key="uploader_video")
             if uploaded_video is not None:
-                adleboden_animation(venue_data_sorted)
+                #video merge
+                 # Button to initiate season analysis
                 st.video(uploaded_video)
+                delay = st.slider("Select Video Delay (seconds)", min_value=0.0, max_value=10.0, value=0.0, step=0.1)
+                if st.button("Analyse merge Video"):
+                    st.session_state['analyse'] = "merge_Video"   
+                    video_file = '/Users/marcgurber/SwissSki/SwissSki_Slalom/MEILLARD Loic_Adelboden_animation..mp4'
+                    video_bytes = open(video_file, 'rb').read()
+                    st.video(video_bytes)
+                    # Add a download button for the video
+                    st.download_button(
+                        label="Download Race Video",
+                        data=video_bytes,
+                        file_name="race_video.mp4",
+                        mime="video/mp4"
+                    )
+                    
 
 
 # Use get() for safe access or check explicitly
