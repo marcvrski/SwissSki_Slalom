@@ -4,12 +4,66 @@ import streamlit as st
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import seaborn as sns
+from geopy.distance import geodesic
 from scipy.stats import linregress
 from scipy.stats import f_oneway
 from matplotlib.colors import Normalize
+from matplotlib.animation import FuncAnimation, FFMpegWriter
+from matplotlib.cm import ScalarMappable
 from shapely.geometry import Point
 import contextily as ctx
 import geopandas as gpd
+
+
+def adleboden_animation(data):
+    filtered_data = data
+    # Calculate the total duration in seconds
+    total_duration = filtered_data['athlete_2_time'].sum()
+
+    # Assume you want each gate to display for its 'athlete_2_time' in seconds
+    num_frames = len(filtered_data)
+    fps = num_frames / total_duration  # frames per second
+
+    # Normalize relative_time_difference for color mapping
+    norm = Normalize(vmin=filtered_data['relative_time_difference'].min(), vmax=filtered_data['relative_time_difference'].max())
+    cmap = plt.get_cmap('RdYlGn')
+    sm = ScalarMappable(cmap=cmap, norm=norm)
+    colors = sm.to_rgba(filtered_data['relative_time_difference'])
+
+    # Plotting setup
+    fig, ax = plt.subplots()
+    scat = ax.scatter(filtered_data['Longitude (°)'], filtered_data['Latitude (°)'], c=colors, s=100, edgecolor='k', alpha=0.8)
+    ax.set_xlabel('')  # Remove x-axis label
+    ax.set_ylabel('')  # Remove y-axis label
+    ax.set_title('Adelboden Slalom 2024 - Meillard vs Raschner')
+
+    # Remove tick labels
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.tick_params(axis='both', which='both', length=0)  # Hide ticks
+
+    # Remove the border (spines)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    # Red dot and time annotation
+    red_dot, = ax.plot([], [], 'ro', markersize=10)
+    time_text = ax.text(0.02, 0.95, '', transform=ax.transAxes)
+
+    def update(frame):
+        red_dot.set_data([filtered_data['Longitude (°)'].iloc[frame]], [filtered_data['Latitude (°)'].iloc[frame]])
+        time_info = f"Gate: {filtered_data['Gate'].iloc[frame]}, Time Difference: {filtered_data['time_difference'].iloc[frame]:.2f}s"
+        time_text.set_text(time_info)
+        time_text.set_position((0.98, 0.02))  # Set position to bottom right
+        time_text.set_ha('right')  # Align text to the right
+        return red_dot, time_text
+
+    # Animation setup
+    ani = FuncAnimation(fig, update, frames=num_frames, init_func=lambda: (red_dot, time_text), blit=True)
+
+    # Saving the animation
+    Writer = FFMpegWriter(fps=fps, metadata=dict(artist='Me'), codec='libx264')
+    ani.save('Adelboden_Animation_new.mp4', writer=Writer)
 
 def summarize_data(data, venue, run):
     rev_athlete = data[data['Best'] == st.session_state['athlete_name_ref']]
@@ -65,51 +119,122 @@ def summarize_data(data, venue, run):
     # Summary statistics for the 'total time (sec)' column
     return 1
 
-def plot_course_map(data, venue): #adelboden -s
-    # Filter data for selected venue and run only, drop rows with missing Longitude data
-    #venue_data = data[(data['Venue'] == venue) & (data['Run'] == run)]
-    
-    #venue_data = venue_data.dropna(subset=["Longitude (°)", "Latitude (°)"])  # Ensure no missing values in Longitude or Latitude
-    venue_data_sorted = data
-    # Check if dataframe is empty after filtering and dropping missing values
-    if venue_data_sorted.empty:
-        st.error("Error: No data available for this venue and run.")
-        return
+def slalom_map(data):
 
-    # Extract relevant columns and create GeoDataFrame
-    latitude = venue_data_sorted["Latitude (°)"]
-    longitude = venue_data_sorted["Longitude (°)"]
+    # Extract relevant columns
+    latitude = data["Latitude (°)"]
+    longitude = data["Longitude (°)"]
+    altitude = data["Altitude (m)"]
+
+    # Function to calculate 3D distance between points
+    def calculate_distance(lat1, lon1, alt1, lat2, lon2, alt2):
+        horizontal_distance = geodesic((lat1, lon1), (lat2, lon2)).meters
+        vertical_distance = abs(alt2 - alt1)
+        return np.sqrt(horizontal_distance**2 + vertical_distance**2)
+
+    # Calculate distances between consecutive gates
+    distances = []
+    for i in range(1, len(latitude)):
+        lat1, lon1, alt1 = latitude.iloc[i-1], longitude.iloc[i-1], altitude.iloc[i-1]
+        lat2, lon2, alt2 = latitude.iloc[i], longitude.iloc[i], altitude.iloc[i]
+        distances.append(calculate_distance(lat1, lon1, alt1, lat2, lon2, alt2))
+
+    
+    # Calculate cumulative distances
+    cumulative_distances = [0] + list(np.cumsum(distances))
+
+
+    # Convert latitude and longitude to geospatial points and create GeoDataFrame
     geometry = [Point(xy) for xy in zip(longitude, latitude)]
     gdf = gpd.GeoDataFrame(venue_data_sorted, geometry=geometry)
-    gdf.set_crs(epsg=4326, inplace=True)  # Set coordinate reference system
-    gdf.to_crs(epsg=3857, inplace=True)  # Convert to Web Mercator for mapping
+
+    # Set the coordinate reference system to WGS84 (lat/lon) and transform to Web Mercator for map plotting
+    gdf = gdf.set_crs(epsg=4326).to_crs(epsg=3857)
 
     # Calculate buffer for improved map boundaries
-    buffer_factor = 0.05
+    buffer_factor = 0.2
     minx, miny, maxx, maxy = gdf.total_bounds
     x_buffer = (maxx - minx) * buffer_factor
     y_buffer = (maxy - miny) * buffer_factor
 
-    # Prepare colormap and normalization
-    norm = Normalize(vmin=venue_data_sorted["relative_time_difference"].min(), vmax=venue_data_sorted["relative_time_difference"].max())
-    colormap = plt.cm.RdYlGn
-
-    # Plotting
-    fig, ax = plt.subplots(figsize=(12, 8))
-    gdf.plot(ax=ax, marker='o', column="relative_time_difference", cmap=colormap, markersize=50, legend=True, legend_kwds={'label': "Relative Time Difference (%)"}, norm=norm)
+    # Plot the map view with a satellite image background
+    fig, ax = plt.subplots(figsize=(10, 6))
+    gdf.plot(ax=ax, marker='o', color='green', linestyle='-', label='Slalom Course Path')
     ax.set_xlim(minx - x_buffer, maxx + x_buffer)
     ax.set_ylim(miny - y_buffer, maxy + y_buffer)
-    ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery)
-    plt.xlabel('Longitude (°)')
-    plt.ylabel('Latitude (°)')
-    plt.title(f'{venue} Slalom Course (Run {run}) with Relative Time Difference Color Gradient')
+    
+    # Setting the extent of the map to cover the buffered area before adding the base map
+    ax.set_xlim(minx - x_buffer, maxx + x_buffer)
+    ax.set_ylim(miny - y_buffer, maxy + y_buffer)
+    ctx.add_basemap(ax, crs=gdf.crs.to_string(), source=ctx.providers.Esri.WorldImagery)
 
-    # Displaying the plot in Streamlit
+    ax.set_xlabel('Longitude (°)')
+    ax.set_ylabel('Latitude (°)')
+    ax.set_title('Map View of the Course')
+    ax.legend()
     st.pyplot(fig)
-    return
 
-# Define the plotting function with Plotly
-# Function to perform analysis and generate plots
+     # Plot altitude profile with cumulative distance
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(cumulative_distances, altitude, marker='o', linestyle='-', color='blue')
+    ax.set_xlabel('Cumulative Distance (m)')
+    ax.set_ylabel('Altitude (m)')
+    ax.set_title('Altitude Profile by Cumulative Distance')
+    ax.grid(True)
+    st.pyplot(fig)
+
+def adelboden_plot_course_map(data):
+    # Sort by gate order
+    data_sorted = data.sort_values(by="Gate")
+
+    # Extract relevant columns
+    latitude = data_sorted["Latitude (°)"]
+    longitude = data_sorted["Longitude (°)"]
+    altitude = data_sorted["Altitude (m)"]
+    relative_time_diff = data_sorted["relative_time_difference"]
+
+    # Convert latitude and longitude to geospatial points and create GeoDataFrame
+    geometry = [Point(xy) for xy in zip(longitude, latitude)]
+    gdf = gpd.GeoDataFrame(data_sorted, geometry=geometry)
+
+    # Set the coordinate reference system to WGS84 (lat/lon) and transform to Web Mercator for map plotting
+    gdf = gdf.set_crs(epsg=4326).to_crs(epsg=3857)
+
+    # Calculate a buffer around the course to zoom out the view
+    buffer_factor = 0.05  # Adjust this factor to increase or decrease the zoom level
+    minx, miny, maxx, maxy = gdf.total_bounds
+    x_buffer = (maxx - minx) * buffer_factor
+    y_buffer = (maxy - miny) * buffer_factor
+
+    # Normalize the color scale for relative_time_difference
+    norm = Normalize(vmin=relative_time_diff.min(), vmax=relative_time_diff.max())
+    colormap = plt.cm.RdYlGn  # Red to Yellow to Green colormap
+
+    # Plot the map view with a satellite image background
+    fig, ax = plt.subplots(figsize=(12, 8))
+    gdf.plot(
+        ax=ax,
+        marker='o',
+        column="relative_time_difference",
+        cmap=colormap,
+        markersize=50,
+        legend=True,
+        legend_kwds={'label': "Relative Time Difference (%)"},
+        norm=norm
+    )
+
+    # Set the extent to include the buffer for zooming out
+    ax.set_xlim(minx - x_buffer, maxx + x_buffer)
+    ax.set_ylim(miny - y_buffer, maxy + y_buffer)
+
+    # Add contextily basemap (satellite map)
+    ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery)
+
+    ax.set_xlabel('Longitude (°)')
+    ax.set_ylabel('Latitude (°)')
+    ax.set_title('Adelboden Slalom Course (Run 2) with Relative Time Difference Color Gradient')
+    
+    st.pyplot(fig)
 
 def segment_analysis(graph_data):
     # Define the segments based on gate numbers
@@ -400,8 +525,6 @@ with st.sidebar:
             st.write(slalom_data)
             st.session_state['file2_uploaded'] = True
 
-    
-
     # Additional logic when both files are uploaded
     if st.session_state['file1_uploaded'] and st.session_state['file2_uploaded']:
         # Text input for user to specify what they want to analyze
@@ -411,7 +534,7 @@ with st.sidebar:
             st.session_state['analyse'] = "analyse"
             
         # Button to initiate slalom map analysis
-        if st.button("Slalom - Map"):
+        if st.button("Slalom Course Analyse"):
             st.session_state['analyse'] = "map"
 
         # Button to initiate season analysis
@@ -433,6 +556,16 @@ if st.session_state.get('analyse') == "analyse":
     st.session_state['graph_data'] = graph_data
     fig = plot_relative_elevation_profile(st.session_state['graph_data'], st.session_state['selected_venue'], st.session_state['run_number'])
     st.plotly_chart(fig)
+    if selected_venue.lower() == 'adelboden' and run_number == 2:
+        venue_data_sorted = graph_data[(graph_data['Venue'] == selected_venue)].sort_values(by="Gate")
+        adelboden_plot_course_map(venue_data_sorted)
+        # Video file uploader
+        with st.expander("Upload Race Video", expanded=True):
+            uploaded_video = st.file_uploader("Upload - Race Video", type=["mp4", "mov", "avi"], key="uploader_video")
+            if uploaded_video is not None:
+                adleboden_animation(venue_data_sorted)
+                st.video(uploaded_video)
+
 
 # Use get() for safe access or check explicitly
 if st.session_state.get('analyse', 'init') == "init":
@@ -443,14 +576,17 @@ if st.session_state.get('analyse') == "map":
     venue_data = slalom_data.dropna(subset=["Longitude (°)", "Latitude (°)"])  # Ensure no missing values in Longitude or Latitude
     venue_data_sorted = venue_data.sort_values(by="Gate (Nr)")
     venue_data_sorted = venue_data_sorted.sort_values(by= "Venue")
-    st.dataframe(venue_data_sorted)
     venues = venue_data_sorted['Venue'].unique()
     selected_venue = st.selectbox("Select a Venue", venues)
-    venue_data_sorted = venue_data[venue_data['Venue'] == selected_venue].sort_values(by="Gate (Nr)")
+    venue_data_sorted = venue_data[(venue_data['Venue'] == selected_venue)].sort_values(by="Gate (Nr)")
+    date = venue_data_sorted['Date'].unique()
+    selected_date = st.selectbox("Select a date", date)
+    venue_data_sorted = venue_data[(venue_data['Date'] == selected_date)].sort_values(by="Gate (Nr)")
     st.session_state['slalom_data'] = venue_data_sorted
     st.session_state['selected_venue'] = selected_venue
-    st.dataframe(venue_data_sorted)
-    plot_course_map(st.session_state['slalom_data'], st.session_state['selected_venue'])
+    st.session_state['selected_date'] = selected_date
+    slalom_map(venue_data_sorted)
+    #plot_course_map(st.session_state['slalom_data'], st.session_state['selected_venue'])
     st.subheader("map")
 
 if st.session_state.get('analyse') == "season_analysis":
