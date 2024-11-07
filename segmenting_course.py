@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 from scipy.stats import f_oneway
 
 # Load the data
@@ -47,3 +48,10 @@ plt.ylabel('Average Time Difference (seconds)')
 plt.title('Average Time Loss by Course Segment with Standard Error')
 plt.show()
 
+# Boxplot of time differences by segment
+plt.figure(figsize=(10, 8))
+sns.boxplot(x='Segment', y='time_difference', data=data, palette='Set3')
+plt.xlabel('Course Segment')
+plt.ylabel('Time Difference (seconds)')
+plt.title('Boxplot of Time Differences by Course Segment')
+plt.show()

@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import linregress
+from scipy.stats import f_oneway
 
 def summarize_data(data, venue, run):
     rev_athlete = data[data['Best'] == st.session_state['athlete_name_ref']]
@@ -38,6 +39,57 @@ def summarize_data(data, venue, run):
 
 # Define the plotting function with Plotly
 # Function to perform analysis and generate plots
+
+def segment_analysis(graph_data):
+    # Define the segments based on gate numbers
+    num_gates = graph_data['Gate'].max()
+    segment_size = num_gates // 3
+    top_segment = range(1, segment_size + 1)
+    middle_segment = range(segment_size + 1, 2 * segment_size + 1)
+    bottom_segment = range(2 * segment_size + 1, num_gates + 1)
+
+    # Categorize each gate into a segment
+    def categorize_segment(gate):
+        if gate in top_segment:
+            return 'Top'
+        elif gate in middle_segment:
+            return 'Middle'
+        elif gate in bottom_segment:
+            return 'Bottom'
+        return None
+
+    graph_data['Segment'] = graph_data['Gate'].apply(categorize_segment)
+
+    # Group and aggregate data
+    detailed_segment_analysis = (
+        graph_data.groupby(['Venue', 'Run', 'Gate', 'Segment'])['time_difference']
+        .mean()
+        .reset_index()
+    )
+
+    segment_summary = detailed_segment_analysis.groupby('Segment').agg(
+        mean_time_difference=('time_difference', 'mean'),
+        std_error=('time_difference', lambda x: np.std(x, ddof=1) / np.sqrt(len(x)))
+    ).reset_index()
+
+    # Plotting with standard error
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.bar(segment_summary['Segment'], segment_summary['mean_time_difference'], yerr=segment_summary['std_error'],
+           capsize=5, color='skyblue', alpha=0.8)
+    ax.set_xlabel('Course Segment')
+    ax.set_ylabel('Average Time Difference (seconds)')
+    ax.set_title('Average Time Loss by Course Segment with Standard Error')
+    st.pyplot(fig)
+
+    # Boxplot of time differences by segment
+    fig, ax = plt.subplots(figsize=(10, 8))
+    sns.boxplot(x='Segment', y='time_difference', data=graph_data, palette='Set3', ax=ax)
+    ax.set_xlabel('Course Segment')
+    ax.set_ylabel('Time Difference (seconds)')
+    ax.set_title('Boxplot of Time Differences by Course Segment')
+    plt.tight_layout()
+    st.pyplot(fig)
+
 def analyze_and_plot_features(data):
     # Filter data for relevant columns and remove rows with missing values for the selected features
     features_data_selected = data[['time_difference', 'Turning Angle [°]', 'Offset [m]', 'Steepness [°]']].dropna()
@@ -172,7 +224,77 @@ def merge_df(athlete_dataframe,course_slalom_dataframe):
     )
     return merged_course_athlete_df
 
+def plot_relative_elevation_profile(data, venue_name, run_number):
+    # Filter data for the specified venue and run
+    venue_data = data[(data['Venue'] == venue_name) & (data['Run'] == run_number)].dropna(subset=["Gate-Gate Distance (m)", "Steepness [°]", "relative_time_difference", "ref_time"])
 
+    # Sort by gate order to ensure correct sequence
+    venue_data_sorted = venue_data.sort_values(by="Gate")
+
+    # Extract relevant columns
+    gate_gate_distance = venue_data_sorted["Gate-Gate Distance (m)"]
+    steepness = venue_data_sorted["Steepness [°]"]
+    relative_time_diff = venue_data_sorted["relative_time_difference"]
+    abs_time_diff = venue_data_sorted["time_difference"]
+    ref_time = venue_data_sorted["ref_time"]
+    gate = venue_data_sorted["Gate"]
+    offset = venue_data_sorted["Offset [m]"]    
+    turning_angle = venue_data_sorted["Turning Angle [°]"] 
+
+# Display additional information in Streamlit
+    st.markdown(f"**Date:** {pd.to_datetime(venue_data_sorted['Date'].iloc[0]).strftime('%d.%m.%Y')}")
+    st.session_state['athlete_name_ref'] = venue_data_sorted['athlete_name_ref'].iloc[0]
+    st.session_state['athlete_name_athlete_2'] = venue_data_sorted['athlete_name_athlete_2'].iloc[0]
+    
+    summarized_data = summarize_data(athlete_data, selected_venue , run_number)
+    #print(summarized_data)  
+
+  # Display the dataset in Streamlit
+    #st.dataframe(venue_data_sorted)
+
+    # Calculate relative altitude changes based on steepness
+    relative_elevation = [0]  # Starting point is 0 (relative)
+    
+    # Calculate cumulative elevation changes
+    for i in range(len(gate_gate_distance)):
+        # Convert steepness to radians for trigonometric calculation
+        slope_radians = np.radians(steepness.iloc[i])
+        # Calculate vertical change based on distance and slope angle
+        vertical_change = gate_gate_distance.iloc[i] * np.sin(slope_radians)
+        # Append the calculated relative elevation change
+        relative_elevation.append(relative_elevation[-1] + vertical_change)
+    
+    # Calculate cumulative distance
+    cumulative_distances = [0] + list(gate_gate_distance.cumsum())
+    
+    # Normalize relative_time_difference to 0-1 scale for color gradient
+    normalized_diff = (relative_time_diff - relative_time_diff.min()) / (relative_time_diff.max() - relative_time_diff.min())
+    colors = normalized_diff.apply(lambda x: f'rgba({int((1 - x) * 255)}, {int(x * 255)}, 0, 0.8)')
+
+    # Create Plotly scatter plot
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=cumulative_distances,
+            y=relative_elevation,
+            mode="markers+lines",
+            marker=dict(color=colors, size=10),
+            line=dict(color="lightgray", width=1),
+            text=[f"Gate: {g}<br>Absolute Time Difference: {t:.2f} s<br>Turning Angle: {ta:.2f}°<br>Offset: {o:.2f} m<br>Steepness: {s:.2f}°" for g, t, ta, o, s in zip(gate, abs_time_diff, turning_angle, offset, steepness)],
+            hoverinfo="text"
+        )
+    )
+    
+    # Customize the layout
+    fig.update_layout(
+        title=f"Relative Elevation Profile of {venue_name} Slalom Course (Run {run_number})",
+        xaxis_title="Cumulative Distance (m)",
+        yaxis_title="Relative Elevation (m)",
+        template="plotly_white",
+        showlegend=False
+    )
+    
+    return fig
 # Initialization of the session state
 if 'analyse' not in st.session_state:
     st.session_state['analyse'] = "init"
@@ -180,34 +302,50 @@ if 'analyse' not in st.session_state:
 # App title
 st.title("Slalom Course Relative Elevation Profile")
 
+
+# Initialize session state keys for tracking file uploads
+if 'file1_uploaded' not in st.session_state:
+    st.session_state['file1_uploaded'] = False
+if 'file2_uploaded' not in st.session_state:
+    st.session_state['file2_uploaded'] = False
+
 # Sidebar logic
 with st.sidebar:
-    uploaded_file1 = st.file_uploader("Upload - Databank_Slalom 23-24 - (Athlete Time)", type="csv")
-    if uploaded_file1 is not None:
-        athlete_data = pd.read_csv(uploaded_file1, delimiter=';')
-        st.write(athlete_data.head())
+    # File uploader for athlete data inside an expander
+    with st.expander("Upload Athlete Times", expanded=not st.session_state['file1_uploaded']):
+        uploaded_file1 = st.file_uploader("Upload - Databank_Slalom 23-24 - (Athlete Time)", type="csv", key="uploader1")
+        if uploaded_file1 is not None:
+            athlete_data = pd.read_csv(uploaded_file1, delimiter=';')
+            st.write(athlete_data.head())
+            st.session_state['file1_uploaded'] = True
 
-        uploaded_file2 = st.file_uploader("Upload - Course_Slalom - Course Data", type="csv")
+    # File uploader for course data inside an expander
+    with st.expander("Upload Course Data", expanded=not st.session_state['file2_uploaded']):
+        uploaded_file2 = st.file_uploader("Upload - Course_Slalom - Course Data", type="csv", key="uploader2")
         if uploaded_file2 is not None:
             slalom_data = pd.read_csv(uploaded_file2, delimiter=';')
             st.write(slalom_data.head())
+            st.session_state['file2_uploaded'] = True
 
-            if 'athlete_data' in locals() and 'slalom_data' in locals():
-                venues = athlete_data['Venue'].unique()
-                selected_venue = st.selectbox("Select a Venue", venues)
-                run_number = st.selectbox("Select Run Number", [1, 2])
+    # Additional logic when both files are uploaded
+    if st.session_state['file1_uploaded'] and st.session_state['file2_uploaded']:
+        venues = athlete_data['Venue'].unique()
+        selected_venue = st.selectbox("Select a Venue", venues)
+        run_number = st.selectbox("Select Run Number", [1, 2])
 
-                # Assuming merge_df is defined to merge athlete_data and slalom_data appropriately
-                graph_data = merge_df(athlete_data, slalom_data)  # Ensure merge_df function is correctly merging the data
-                st.session_state['graph_data'] = graph_data  # Storing in session state
+        # Assuming merge_df is defined to merge athlete_data and slalom_data appropriately
+        graph_data = merge_df(athlete_data, slalom_data)
+        st.session_state['graph_data'] = graph_data
 
-                if st.button("Slalom Race Analyse"):
-                    st.session_state['analyse'] = "analyse"
-                    st.session_state['selected_venue'] = selected_venue
-                    st.session_state['run_number'] = run_number
+        # Button to initiate slalom race analysis
+        if st.button("Slalom Race Analyse"):
+            st.session_state['analyse'] = "analyse"
+            st.session_state['selected_venue'] = selected_venue
+            st.session_state['run_number'] = run_number
 
-                if st.button("Season Analysis"):
-                    st.session_state['analyse'] = "season_analysis"
+        # Button to initiate season analysis
+        if st.button("Season Analysis"):
+            st.session_state['analyse'] = "season_analysis"
 
 # Plotting logic
 if st.session_state.get('analyse') == "analyse":
@@ -221,5 +359,6 @@ if st.session_state.get('analyse', 'init') == "init":
 
 if st.session_state.get('analyse') == "season_analysis":
     analyze_and_plot_features(st.session_state['graph_data'])
+    segment_analysis(st.session_state['graph_data'])
     st.write("Season Analysis Complete")
     st.session_state['analyse'] = "init"  # Resetting the state
