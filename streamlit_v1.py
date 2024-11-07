@@ -42,6 +42,9 @@ def analyze_and_plot_features(data):
     # Filter data for relevant columns and remove rows with missing values for the selected features
     features_data_selected = data[['time_difference', 'Turning Angle [°]', 'Offset [m]', 'Steepness [°]']].dropna()
 
+    # Filter out data points where "Offset [m]" is greater than 150
+    features_data_selected = features_data_selected[features_data_selected['Offset [m]'] < 150]
+
     # Exclude rows where time_difference is less than -1.0
     features_data_filtered = features_data_selected[features_data_selected['time_difference'] >= -1.0]
 
@@ -71,8 +74,7 @@ def analyze_and_plot_features(data):
     filtered_results_df = pd.DataFrame(filtered_results)
     st.write("Filtered Significance of Selected Course Feature Relationships", filtered_results_df)
 
-    # Plotting the relationships with the filtered data in a single figure with regression lines
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    # Plotting the relationships with the filtered data in separate figures with regression lines
     titles_selected = [
         "Impact of Turning Angle on Time Difference",
         "Impact of Offset on Time Difference",
@@ -80,85 +82,13 @@ def analyze_and_plot_features(data):
     ]
 
     # Generate scatter plots with regression lines
-    for ax, feature, title in zip(axes.flatten(), selected_features, titles_selected):
+    for feature, title in zip(selected_features, titles_selected):
+        fig, ax = plt.subplots(figsize=(6, 6))
         sns.regplot(x=features_data_filtered['time_difference'], y=features_data_filtered[feature], ax=ax, scatter_kws={'s': 10}, line_kws={'color': 'orange'})
         ax.set_xlabel("Time Difference (seconds)")
         ax.set_ylabel(feature)
-        ax.set_title(title)
-
-    # Adjust layout and show plot
-    plt.tight_layout()
-    st.pyplot(fig)
-
-def plot_relative_elevation_profile(data, venue_name, run_number):
-    # Filter data for the specified venue and run
-    venue_data = data[(data['Venue'] == venue_name) & (data['Run'] == run_number)].dropna(subset=["Gate-Gate Distance (m)", "Steepness [°]", "relative_time_difference", "ref_time"])
-
-    # Sort by gate order to ensure correct sequence
-    venue_data_sorted = venue_data.sort_values(by="Gate")
-
-    # Extract relevant columns
-    gate_gate_distance = venue_data_sorted["Gate-Gate Distance (m)"]
-    steepness = venue_data_sorted["Steepness [°]"]
-    relative_time_diff = venue_data_sorted["relative_time_difference"]
-    abs_time_diff = venue_data_sorted["time_difference"]
-    ref_time = venue_data_sorted["ref_time"]
-    gate = venue_data_sorted["Gate"]
-    offset = venue_data_sorted["Offset [m]"]    
-    turning_angle = venue_data_sorted["Turning Angle [°]"] 
-
-# Display additional information in Streamlit
-    st.markdown(f"**Date:** {pd.to_datetime(venue_data_sorted['Date'].iloc[0]).strftime('%d.%m.%Y')}")
-    st.session_state['athlete_name_ref'] = venue_data_sorted['athlete_name_ref'].iloc[0]
-    st.session_state['athlete_name_athlete_2'] = venue_data_sorted['athlete_name_athlete_2'].iloc[0]
-    
-    summarized_data = summarize_data(athlete_data, selected_venue , run_number)
-    #print(summarized_data)  
-
-  # Display the dataset in Streamlit
-    #st.dataframe(venue_data_sorted)
-
-    # Calculate relative altitude changes based on steepness
-    relative_elevation = [0]  # Starting point is 0 (relative)
-    
-    # Calculate cumulative elevation changes
-    for i in range(len(gate_gate_distance)):
-        # Convert steepness to radians for trigonometric calculation
-        slope_radians = np.radians(steepness.iloc[i])
-        # Calculate vertical change based on distance and slope angle
-        vertical_change = gate_gate_distance.iloc[i] * np.sin(slope_radians)
-        # Append the calculated relative elevation change
-        relative_elevation.append(relative_elevation[-1] + vertical_change)
-    
-    # Calculate cumulative distance
-    cumulative_distances = [0] + list(gate_gate_distance.cumsum())
-    
-    # Normalize relative_time_difference to 0-1 scale for color gradient
-    normalized_diff = (relative_time_diff - relative_time_diff.min()) / (relative_time_diff.max() - relative_time_diff.min())
-    colors = normalized_diff.apply(lambda x: f'rgba({int((1 - x) * 255)}, {int(x * 255)}, 0, 0.8)')
-
-    # Create Plotly scatter plot
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=cumulative_distances,
-            y=relative_elevation,
-            mode="markers+lines",
-            marker=dict(color=colors, size=10),
-            line=dict(color="lightgray", width=1),
-            text=[f"Gate: {g}<br>Absolute Time Difference: {t:.2f} s<br>Turning Angle: {ta:.2f}°<br>Offset: {o:.2f} m<br>Steepness: {s:.2f}°" for g, t, ta, o, s in zip(gate, abs_time_diff, turning_angle, offset, steepness)],
-            hoverinfo="text"
-        )
-    )
-    
-    # Customize the layout
-    fig.update_layout(
-        title=f"Relative Elevation Profile of {venue_name} Slalom Course (Run {run_number})",
-        xaxis_title="Cumulative Distance (m)",
-        yaxis_title="Relative Elevation (m)",
-        template="plotly_white",
-        showlegend=False
-    )
+        ax.set_title(f"{title}\nR-squared = {filtered_results_df[filtered_results_df['Feature'] == feature]['R-squared'].values[0]:.2f}")
+        st.pyplot(fig)
     
     return fig
 
@@ -290,5 +220,6 @@ if st.session_state.get('analyse', 'init') == "init":
     st.subheader("Please upload the data files to begin the analysis.")
 
 if st.session_state.get('analyse') == "season_analysis":
+    analyze_and_plot_features(st.session_state['graph_data'])
     st.write("Season Analysis Complete")
     st.session_state['analyse'] = "init"  # Resetting the state
