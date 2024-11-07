@@ -17,19 +17,43 @@ def summarize_data(data, venue, run):
    
      #Course data
     st.subheader("Race and Course Details:")
-    st.write("Gates :",rev_athlete['Gates (#)'].values[0])
-
-    #rev_athlete
-
-    st.metric(label="Athlete Name (Rev)", value=st.session_state['athlete_name_ref'])
-    st.write("Rev Time (sec):", float(rev_athlete['total time (sec)'].values[0]))
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric(label="Date", value=pd.to_datetime(rev_athlete['Date'].values[0]).strftime('%d.%m.%Y'))
+        st.metric(label="Venue", value=rev_athlete['Venue'].values[0])
+    with col2:
+        st.metric(label="Course Name", value=rev_athlete['Course name'].values[0])
+        st.metric(label="Course Setter", value=rev_athlete['Course setter'].values[0])
     
-    #compare_athlete
-    st.metric(label="Athlete Name (Compare)", value=st.session_state['athlete_name_athlete_2'])
-    st.write("Time (sec):", float(compare_athlete['total time (sec)'].values[0]))
-    time_diff = round(float(compare_athlete['total time (sec)'].values[0]) - float(rev_athlete['total time (sec)'].values[0]), 2)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(label="Gates", value=int(rev_athlete['Gates (#)'].values[0]))
+    with col2:
+        st.metric(label="Turning Gates", value=int(rev_athlete['Turning Gates (#)'].values[0]))
+    with col3:
+        st.metric(label="Temp Start (°C)", value=int(rev_athlete['Temp Start (°C)'].values[0]))
+    
+    #rev_athlete
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(label="Athlete Name (Reference)", value=st.session_state['athlete_name_ref'])
+    with col2:
+        st.metric(label="Time (sec)", value=float(rev_athlete['total time (sec)'].values[0]))
+    with col3:
+        st.write("")
 
-    st.write("Time Difference (sec):", time_diff)
+    #compare_athlete
+    col1, col2, col3= st.columns(3)
+    with col1:
+        st.metric(label="Athlete Name (Compare)", value=st.session_state['athlete_name_athlete_2'])
+    with col2:
+        time_diff = round(float(compare_athlete['total time (sec)'].values[0]) - float(rev_athlete['total time (sec)'].values[0]), 2)
+        st.metric(label="Time (sec)", value=float(compare_athlete['total time (sec)'].values[0]), delta=f"{time_diff} sec", delta_color="inverse")
+    
+
+    # Draw a thin white line
+    st.markdown("<hr style='border: 1px solid white;'>", unsafe_allow_html=True)
+
 
     # Play video if venue is Adelboden and run is 2
     #if venue.lower() == 'adelboden' and run == 1:
@@ -302,7 +326,6 @@ def plot_relative_elevation_profile(data, venue_name, run_number):
     turning_angle = venue_data_sorted["Turning Angle [°]"] 
 
 # Display additional information in Streamlit
-    st.markdown(f"**Date:** {pd.to_datetime(venue_data_sorted['Date'].iloc[0]).strftime('%d.%m.%Y')}")
     st.session_state['athlete_name_ref'] = venue_data_sorted['athlete_name_ref'].iloc[0]
     st.session_state['athlete_name_athlete_2'] = venue_data_sorted['athlete_name_athlete_2'].iloc[0]
     
@@ -351,14 +374,16 @@ def plot_relative_elevation_profile(data, venue_name, run_number):
         xaxis_title="Cumulative Distance (m)",
         yaxis_title="Relative Elevation (m)",
         template="plotly_white",
-        showlegend=False
+        showlegend=False,
+        width=1200,  # Increase the width
+        height=800   # Increase the height
     )
     
     return fig
 
-
 # App title
-st.title("Slalom Course Relative Elevation Profile")
+st.set_page_config(layout="wide")
+st.title("Slalom Course Analysis")
 
 # Initialization of the session state with default values
 if 'file1_uploaded' not in st.session_state:
@@ -377,7 +402,7 @@ with st.sidebar:
         uploaded_file1 = st.file_uploader("Upload - Databank Slalom 23-24 - (Athlete Time)", type="csv", key="uploader1")
         if uploaded_file1 is not None:
             athlete_data = pd.read_csv(uploaded_file1, delimiter=';')
-            st.write(athlete_data.head())
+            st.write(athlete_data)
             st.session_state['file1_uploaded'] = True
 
     # File uploader for course data inside an expander
@@ -385,7 +410,7 @@ with st.sidebar:
         uploaded_file2 = st.file_uploader("Upload - Course Slalom - Course Data", type="csv", key="uploader2")
         if uploaded_file2 is not None:
             slalom_data = pd.read_csv(uploaded_file2, delimiter=';')
-            st.write(slalom_data.head())
+            st.write(slalom_data)
             st.session_state['file2_uploaded'] = True
 
     # Additional logic when both files are uploaded
@@ -412,9 +437,12 @@ with st.sidebar:
         if st.button("Slalom - Map"):
             st.session_state['analyse'] = "map"
 
+        # Button to trigger snow effect
+        if st.button("Let it Snow!"):
+            st.snow()
+
 # Plotting logic
 if st.session_state.get('analyse') == "analyse":
-    st.write("Ready to plot:", st.session_state['graph_data'].head())  # Debugging output
     fig = plot_relative_elevation_profile(st.session_state['graph_data'], st.session_state['selected_venue'], st.session_state['run_number'])
     st.plotly_chart(fig)
 
