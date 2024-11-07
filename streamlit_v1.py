@@ -488,15 +488,15 @@ with st.sidebar:
         # Text input for user to specify what they want to analyze
         st.subheader("Please Select your Analysis")
         # Button to initiate slalom race analysis
-        if st.button("Slalom Race Analyse"):
+        if st.button("Analyse Slalom Race"):
             st.session_state['analyse'] = "analyse"
             
         # Button to initiate slalom map analysis
-        if st.button("Slalom Course Analyse"):
+        if st.button("Analyse Slalom Course"):
             st.session_state['analyse'] = "map"
 
         # Button to initiate season analysis
-        if st.button("Season Analysis"):
+        if st.button("Analyse Season Data"):
                 st.session_state['analyse'] = "season_analysis"    
 
         # Button to trigger snow effect
@@ -565,4 +565,4 @@ if st.session_state.get('analyse') == "season_analysis":
     analyze_and_plot_features(st.session_state['graph_data'])
     segment_analysis(st.session_state['graph_data'])
     st.write("Season Analysis Complete")
-    st.session_state['analyse'] = "init"  # Resetting the state
+    #st.session_state['analyse'] = "init"  # Resetting the state
