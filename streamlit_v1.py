@@ -295,33 +295,34 @@ def plot_relative_elevation_profile(data, venue_name, run_number):
     )
     
     return fig
-# Initialization of the session state
-if 'analyse' not in st.session_state:
-    st.session_state['analyse'] = "init"
+
 
 # App title
 st.title("Slalom Course Relative Elevation Profile")
 
-
-# Initialize session state keys for tracking file uploads
+# Initialization of the session state with default values
 if 'file1_uploaded' not in st.session_state:
     st.session_state['file1_uploaded'] = False
+
 if 'file2_uploaded' not in st.session_state:
     st.session_state['file2_uploaded'] = False
+
+if 'analyse' not in st.session_state:
+    st.session_state['analyse'] = "init"
 
 # Sidebar logic
 with st.sidebar:
     # File uploader for athlete data inside an expander
-    with st.expander("Upload Athlete Times", expanded=not st.session_state['file1_uploaded']):
-        uploaded_file1 = st.file_uploader("Upload - Databank_Slalom 23-24 - (Athlete Time)", type="csv", key="uploader1")
+    with st.expander("Upload Athlete Times", expanded=not st.session_state.get('file1_uploaded', False)):
+        uploaded_file1 = st.file_uploader("Upload - Databank Slalom 23-24 - (Athlete Time)", type="csv", key="uploader1")
         if uploaded_file1 is not None:
             athlete_data = pd.read_csv(uploaded_file1, delimiter=';')
             st.write(athlete_data.head())
             st.session_state['file1_uploaded'] = True
 
     # File uploader for course data inside an expander
-    with st.expander("Upload Course Data", expanded=not st.session_state['file2_uploaded']):
-        uploaded_file2 = st.file_uploader("Upload - Course_Slalom - Course Data", type="csv", key="uploader2")
+    with st.expander("Upload Course Data", expanded=not st.session_state.get('file2_uploaded', False)):
+        uploaded_file2 = st.file_uploader("Upload - Course Slalom - Course Data", type="csv", key="uploader2")
         if uploaded_file2 is not None:
             slalom_data = pd.read_csv(uploaded_file2, delimiter=';')
             st.write(slalom_data.head())
