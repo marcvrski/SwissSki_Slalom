@@ -24,10 +24,10 @@ def summarize_data(data, venue, run):
     st.write("Time Difference (sec):", time_diff)
 
     # Play video if venue is Adelboden and run is 2
-    if venue.lower() == 'adelboden' and run == 1:
-        video_file = '/Users/marcgurber/SwissSki/SwissSki_Slalom/Ramon_Adelboden_7_1_2024.mov'
-        video_bytes = open(video_file, 'rb').read()
-        st.video(video_bytes)
+    #if venue.lower() == 'adelboden' and run == 1:
+    #    video_file = '/Users/marcgurber/SwissSki/SwissSki_Slalom/Ramon_Adelboden_7_1_2024.mov'
+    #    video_bytes = open(video_file, 'rb').read()
+    #    st.video(video_bytes)
 
 
     # Summary statistics for the 'total time (sec)' column
@@ -190,6 +190,7 @@ def merge_df(athlete_dataframe,course_slalom_dataframe):
 # Streamlit app
 st.title("Slalom Course Relative Elevation Profile")
 # Sidebar logic
+st.session_state['analyse'] = "init"
 
 with st.sidebar:
     uploaded_file1 = st.file_uploader("Upload - Databank_Slalom_23-24  -  (Athlete Time)", type="csv") 
@@ -214,16 +215,30 @@ with st.sidebar:
             graph_data = merge_df(athlete_data, slalom_data)
         
             # Place the 'Analyse' button in the sidebar
-            if st.button("Analyse"):
-                st.session_state['analyse'] = True
+            if st.button("Slalom Race Analyse"):
+                st.session_state['analyse'] = "analyse"
                 st.session_state['selected_venue'] = selected_venue
                 st.session_state['run_number'] = run_number
                 st.session_state['graph_data'] = graph_data  # Assuming the merge doesn't create very large data
 
+            # Place the 'Analyse' button in the sidebar
+            if st.button("Season Analysis"):
+                st.session_state['analyse'] = "season_analysis"
+
+if st.session_state['analyse'] == "init":
+    st.title("Please upload the data files to begin the analysis.")
+
+
 # Main window logic for plotting
-if 'analyse' in st.session_state and st.session_state['analyse']:
+if st.session_state['analyse'] == "analyse":
     fig = plot_relative_elevation_profile(st.session_state['graph_data'], st.session_state['selected_venue'], st.session_state['run_number'])
     st.plotly_chart(fig)
     # Reset the state if needed or allow for re-analysis
     if st.button("Clear Plot"):
         del st.session_state['analyse']  # This will remove the plot and reset the analysis state
+
+if st.session_state['analyse'] == "season_analysis":
+    del st.session_state['analyse']  # This will remove the plot and reset the analysis state
+    st.write("Season Analysis")
+    st.write("Test")
+    # Add the season analysis
