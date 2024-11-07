@@ -154,7 +154,7 @@ def adelboden_plot_course_map(data):
     gdf = gdf.set_crs(epsg=4326).to_crs(epsg=3857)
 
     # Calculate a buffer around the course to zoom out the view
-    buffer_factor = 0.05  # Adjust this factor to increase or decrease the zoom level
+    buffer_factor = 0.5  # Adjust this factor to increase or decrease the zoom level
     minx, miny, maxx, maxy = gdf.total_bounds
     x_buffer = (maxx - minx) * buffer_factor
     y_buffer = (maxy - miny) * buffer_factor
@@ -221,23 +221,27 @@ def segment_analysis(graph_data):
         std_error=('time_difference', lambda x: np.std(x, ddof=1) / np.sqrt(len(x)))
     ).reset_index()
 
-    # Plotting with standard error
-    fig, ax = plt.subplots(figsize=(3, 2))
-    ax.bar(segment_summary['Segment'], segment_summary['mean_time_difference'], yerr=segment_summary['std_error'],
-           capsize=5, color='skyblue', alpha=0.8)
-    ax.set_xlabel('Course Segment')
-    ax.set_ylabel('Avg Time Diff (s)')
-    ax.set_title('Avg Time Loss by Segment')
-    st.pyplot(fig)
+    col1, col2 = st.columns(2)
 
-    # Boxplot of time differences by segment
-    fig, ax = plt.subplots(figsize=(4, 3))
-    sns.boxplot(x='Segment', y='time_difference', data=graph_data, palette='Set3', ax=ax)
-    ax.set_xlabel('Course Segment')
-    ax.set_ylabel('Time Diff (s)')
-    ax.set_title('Time Differences by Segment')
-    plt.tight_layout()
-    st.pyplot(fig)
+    with col1:
+        # Plotting with standard error
+        fig, ax = plt.subplots(figsize=(3, 2))
+        ax.bar(segment_summary['Segment'], segment_summary['mean_time_difference'], yerr=segment_summary['std_error'],
+               capsize=5, color='skyblue', alpha=0.8)
+        ax.set_xlabel('Course Segment')
+        ax.set_ylabel('Avg Time Diff (s)')
+        ax.set_title('Avg Time Loss by Segment')
+        st.pyplot(fig)
+
+    with col2:
+        # Boxplot of time differences by segment
+        fig, ax = plt.subplots(figsize=(4, 3))
+        sns.boxplot(x='Segment', y='time_difference', data=graph_data, palette='Set3', ax=ax)
+        ax.set_xlabel('Course Segment')
+        ax.set_ylabel('Time Diff (s)')
+        ax.set_title('Time Differences by Segment')
+        plt.tight_layout()
+        st.pyplot(fig)
 
 def analyze_and_plot_features(data):
     # Filter data for relevant columns and remove rows with missing values for the selected features
@@ -282,15 +286,16 @@ def analyze_and_plot_features(data):
         "Impact of Steepness on Time Difference"
     ]
 
-    # Generate scatter plots with regression lines
-    for feature, title in zip(selected_features, titles_selected):
-        fig, ax = plt.subplots(figsize=(6, 6))
-        sns.regplot(x=features_data_filtered['time_difference'], y=features_data_filtered[feature], ax=ax, scatter_kws={'s': 10}, line_kws={'color': 'orange'})
-        ax.set_xlabel("Time Difference (seconds)")
-        ax.set_ylabel(feature)
-        ax.set_title(f"{title}\nR-squared = {filtered_results_df[filtered_results_df['Feature'] == feature]['R-squared'].values[0]:.2f}")
-        st.pyplot(fig)
-    
+    # Generate scatter plots with regression lines and display them side by side
+    cols = st.columns(3)
+    for col, feature, title in zip(cols, selected_features, titles_selected):
+        with col:
+            fig, ax = plt.subplots(figsize=(6, 6))
+            sns.regplot(x=features_data_filtered['time_difference'], y=features_data_filtered[feature], ax=ax, scatter_kws={'s': 10}, line_kws={'color': 'orange'})
+            ax.set_xlabel("Time Difference (seconds)")
+            ax.set_ylabel(feature)
+            ax.set_title(f"{title}\nR-squared = {filtered_results_df[filtered_results_df['Feature'] == feature]['R-squared'].values[0]:.2f}")
+            st.pyplot(fig)
     return fig
 
 def merge_df(athlete_dataframe,course_slalom_dataframe):
@@ -448,7 +453,7 @@ def plot_relative_elevation_profile(data, venue_name, run_number):
 
 # App title
 st.set_page_config(layout="wide")
-st.title("Slalom Course Analysis")
+st.title("Slalom Analysis")
 
 # Initialization of the session state with default values
 if 'file1_uploaded' not in st.session_state:
@@ -481,7 +486,7 @@ with st.sidebar:
     # Additional logic when both files are uploaded
     if st.session_state['file1_uploaded'] and st.session_state['file2_uploaded']:
         # Text input for user to specify what they want to analyze
-        st.subheader("Please Select your Analysis.")
+        st.subheader("Please Select your Analysis")
         # Button to initiate slalom race analysis
         if st.button("Slalom Race Analyse"):
             st.session_state['analyse'] = "analyse"
@@ -555,8 +560,6 @@ if st.session_state.get('analyse') == "map":
     st.session_state['selected_venue'] = selected_venue
     st.session_state['selected_date'] = selected_date
     slalom_map(venue_data_sorted)
-    #plot_course_map(st.session_state['slalom_data'], st.session_state['selected_venue'])
-    st.subheader("map")
 
 if st.session_state.get('analyse') == "season_analysis":
     analyze_and_plot_features(st.session_state['graph_data'])
