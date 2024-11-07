@@ -6,6 +6,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import linregress
 from scipy.stats import f_oneway
+from matplotlib.colors import Normalize
+from shapely.geometry import Point
+import contextily as ctx
+import geopandas as gpd
 
 def summarize_data(data, venue, run):
     rev_athlete = data[data['Best'] == st.session_state['athlete_name_ref']]
@@ -36,6 +40,62 @@ def summarize_data(data, venue, run):
 
     # Summary statistics for the 'total time (sec)' column
     return 1
+
+def plot_course_map(data, venue, run):
+    # Filter data for selected venue and run only, drop rows with missing Longitude data
+    venues = data['Venue'].unique()
+
+    # Display the image
+    image_path = '/Users/marcgurber/SwissSki/SwissSki_Slalom/adelboden_map_color.png'
+    st.image(image_path, caption='Adelboden Map Color', use_column_width=True)
+    
+    selected_venue = st.selectbox("Select a Venue", venues)
+    run_number = st.selectbox("Select Run Number", [1, 2])
+
+    st.dataframe(data)
+    venue_data = data[(data['Venue'] == venue) & (data['Run'] == run)]
+    st.dataframe(venue_data)
+
+    # Sort by gate order
+    venue_data_sorted = venue_data.sort_values(by="Gate")
+
+    # Extract relevant columns
+    latitude = venue_data_sorted["Latitude (°)"]
+    longitude = venue_data_sorted["Longitude (°)"]
+    geometry = [Point(xy) for xy in zip(longitude, latitude)]
+    gdf = gpd.GeoDataFrame(venue_data_sorted, geometry=geometry)
+    gdf = gdf.set_crs(epsg=4326).to_crs(epsg=3857)
+
+    # Buffer for zooming out
+    buffer_factor = 0.05
+    if gdf.is_empty:
+        st.error("Error: GeoDataFrame is empty.")
+        return
+
+    minx, miny, maxx, maxy = gdf.total_bounds
+    if not np.isfinite([minx, miny, maxx, maxy]).all():
+        st.error("Error: Axis limits contain NaN or infinite values.")
+        return
+
+    x_buffer = (maxx - minx) * buffer_factor
+    y_buffer = (maxy - miny) * buffer_factor
+
+    # Color normalization
+    norm = Normalize(vmin=venue_data_sorted["relative_time_difference"].min(), vmax=venue_data_sorted["relative_time_difference"].max())
+    colormap = plt.cm.RdYlGn
+
+    # Plotting
+    fig, ax = plt.subplots(figsize=(12, 8))
+    gdf.plot(ax=ax, marker='o', column="relative_time_difference", cmap=colormap, markersize=50, legend=True, legend_kwds={'label': "Relative Time Difference (%)"}, norm=norm)
+    ax.set_xlim(minx - x_buffer, maxx + x_buffer)
+    ax.set_ylim(miny - y_buffer, maxy + y_buffer)
+    ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery)
+    plt.xlabel('Longitude (°)')
+    plt.ylabel('Latitude (°)')
+    plt.title(f'{venue} Slalom Course (Run {run}) with Relative Time Difference Color Gradient')
+
+    # Displaying the plot in Streamlit
+    st.pyplot(fig)
 
 # Define the plotting function with Plotly
 # Function to perform analysis and generate plots
@@ -348,6 +408,10 @@ with st.sidebar:
         if st.button("Season Analysis"):
             st.session_state['analyse'] = "season_analysis"
 
+        # Button to initiate season analysis
+        if st.button("Slalom - Map"):
+            st.session_state['analyse'] = "map"
+
 # Plotting logic
 if st.session_state.get('analyse') == "analyse":
     st.write("Ready to plot:", st.session_state['graph_data'].head())  # Debugging output
@@ -357,6 +421,10 @@ if st.session_state.get('analyse') == "analyse":
 # Use get() for safe access or check explicitly
 if st.session_state.get('analyse', 'init') == "init":
     st.subheader("Please upload the data files to begin the analysis.")
+
+if st.session_state.get('analyse') == "map":
+    plot_course_map(st.session_state['graph_data'], st.session_state['selected_venue'], st.session_state['run_number'])
+    st.subheader("map")
 
 if st.session_state.get('analyse') == "season_analysis":
     analyze_and_plot_features(st.session_state['graph_data'])
