@@ -2,6 +2,9 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import linregress
 
 def summarize_data(data, venue, run):
     rev_athlete = data[data['Best'] == st.session_state['athlete_name_ref']]
@@ -34,6 +37,58 @@ def summarize_data(data, venue, run):
     return 1
 
 # Define the plotting function with Plotly
+# Function to perform analysis and generate plots
+def analyze_and_plot_features(data):
+    # Filter data for relevant columns and remove rows with missing values for the selected features
+    features_data_selected = data[['time_difference', 'Turning Angle [°]', 'Offset [m]', 'Steepness [°]']].dropna()
+
+    # Exclude rows where time_difference is less than -1.0
+    features_data_filtered = features_data_selected[features_data_selected['time_difference'] >= -1.0]
+
+    # Perform linear regression and collect results for Turning Angle, Offset, and Steepness with filtered data
+    selected_features = ['Turning Angle [°]', 'Offset [m]', 'Steepness [°]']
+    filtered_results = {
+        "Feature": [],
+        "Slope": [],
+        "Intercept": [],
+        "R-squared": [],
+        "p-value": [],
+        "Significant (p < 0.05)": []
+    }
+
+    # Regression analysis for each feature against time_difference on the filtered dataset
+    for feature in selected_features:
+        slope, intercept, r_value, p_value, std_err = linregress(features_data_filtered['time_difference'], features_data_filtered[feature])
+        # Append results to dictionary
+        filtered_results["Feature"].append(feature)
+        filtered_results["Slope"].append(slope)
+        filtered_results["Intercept"].append(intercept)
+        filtered_results["R-squared"].append(r_value**2)
+        filtered_results["p-value"].append(p_value)
+        filtered_results["Significant (p < 0.05)"].append(p_value < 0.05)
+
+    # Convert results to a DataFrame
+    filtered_results_df = pd.DataFrame(filtered_results)
+    st.write("Filtered Significance of Selected Course Feature Relationships", filtered_results_df)
+
+    # Plotting the relationships with the filtered data in a single figure with regression lines
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    titles_selected = [
+        "Impact of Turning Angle on Time Difference",
+        "Impact of Offset on Time Difference",
+        "Impact of Steepness on Time Difference"
+    ]
+
+    # Generate scatter plots with regression lines
+    for ax, feature, title in zip(axes.flatten(), selected_features, titles_selected):
+        sns.regplot(x=features_data_filtered['time_difference'], y=features_data_filtered[feature], ax=ax, scatter_kws={'s': 10}, line_kws={'color': 'orange'})
+        ax.set_xlabel("Time Difference (seconds)")
+        ax.set_ylabel(feature)
+        ax.set_title(title)
+
+    # Adjust layout and show plot
+    plt.tight_layout()
+    st.pyplot(fig)
 
 def plot_relative_elevation_profile(data, venue_name, run_number):
     # Filter data for the specified venue and run
@@ -187,58 +242,53 @@ def merge_df(athlete_dataframe,course_slalom_dataframe):
     )
     return merged_course_athlete_df
 
-# Streamlit app
-st.title("Slalom Course Relative Elevation Profile")
-# Sidebar logic
-st.session_state['analyse'] = "init"
 
+# Initialization of the session state
+if 'analyse' not in st.session_state:
+    st.session_state['analyse'] = "init"
+
+# App title
+st.title("Slalom Course Relative Elevation Profile")
+
+# Sidebar logic
 with st.sidebar:
-    uploaded_file1 = st.file_uploader("Upload - Databank_Slalom_23-24  -  (Athlete Time)", type="csv") 
+    uploaded_file1 = st.file_uploader("Upload - Databank_Slalom 23-24 - (Athlete Time)", type="csv")
     if uploaded_file1 is not None:
         athlete_data = pd.read_csv(uploaded_file1, delimiter=';')
-        #st.write("filename:", uploaded_file1.name)
         st.write(athlete_data.head())
-        
+
         uploaded_file2 = st.file_uploader("Upload - Course_Slalom - Course Data", type="csv")
         if uploaded_file2 is not None:
             slalom_data = pd.read_csv(uploaded_file2, delimiter=';')
-            #st.write("filename:", uploaded_file2.name)
             st.write(slalom_data.head())
 
-            # Dropdown for selecting venue
-            venues = athlete_data['Venue'].unique()
-            selected_venue = st.selectbox("Select a Venue", venues)
+            if 'athlete_data' in locals() and 'slalom_data' in locals():
+                venues = athlete_data['Venue'].unique()
+                selected_venue = st.selectbox("Select a Venue", venues)
+                run_number = st.selectbox("Select Run Number", [1, 2])
 
-            # Dropdown for selecting run
-            run_number = st.selectbox("Select Run Number", [1, 2])
+                # Assuming merge_df is defined to merge athlete_data and slalom_data appropriately
+                graph_data = merge_df(athlete_data, slalom_data)  # Ensure merge_df function is correctly merging the data
+                st.session_state['graph_data'] = graph_data  # Storing in session state
 
-            graph_data = merge_df(athlete_data, slalom_data)
-        
-            # Place the 'Analyse' button in the sidebar
-            if st.button("Slalom Race Analyse"):
-                st.session_state['analyse'] = "analyse"
-                st.session_state['selected_venue'] = selected_venue
-                st.session_state['run_number'] = run_number
-                st.session_state['graph_data'] = graph_data  # Assuming the merge doesn't create very large data
+                if st.button("Slalom Race Analyse"):
+                    st.session_state['analyse'] = "analyse"
+                    st.session_state['selected_venue'] = selected_venue
+                    st.session_state['run_number'] = run_number
 
-            # Place the 'Analyse' button in the sidebar
-            if st.button("Season Analysis"):
-                st.session_state['analyse'] = "season_analysis"
+                if st.button("Season Analysis"):
+                    st.session_state['analyse'] = "season_analysis"
 
-if st.session_state['analyse'] == "init":
-    st.title("Please upload the data files to begin the analysis.")
-
-
-# Main window logic for plotting
-if st.session_state['analyse'] == "analyse":
+# Plotting logic
+if st.session_state.get('analyse') == "analyse":
+    st.write("Ready to plot:", st.session_state['graph_data'].head())  # Debugging output
     fig = plot_relative_elevation_profile(st.session_state['graph_data'], st.session_state['selected_venue'], st.session_state['run_number'])
     st.plotly_chart(fig)
-    # Reset the state if needed or allow for re-analysis
-    if st.button("Clear Plot"):
-        del st.session_state['analyse']  # This will remove the plot and reset the analysis state
 
-if st.session_state['analyse'] == "season_analysis":
-    del st.session_state['analyse']  # This will remove the plot and reset the analysis state
-    st.write("Season Analysis")
-    st.write("Test")
-    # Add the season analysis
+# Use get() for safe access or check explicitly
+if st.session_state.get('analyse', 'init') == "init":
+    st.subheader("Please upload the data files to begin the analysis.")
+
+if st.session_state.get('analyse') == "season_analysis":
+    st.write("Season Analysis Complete")
+    st.session_state['analyse'] = "init"  # Resetting the state
