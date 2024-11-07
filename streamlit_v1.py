@@ -65,46 +65,32 @@ def summarize_data(data, venue, run):
     # Summary statistics for the 'total time (sec)' column
     return 1
 
-def plot_course_map(data, venue, run):
+def plot_course_map(data, venue): #adelboden -s
     # Filter data for selected venue and run only, drop rows with missing Longitude data
-    venues = data['Venue'].unique()
-
-    # Display the image
-    image_path = '/Users/marcgurber/SwissSki/SwissSki_Slalom/adelboden_map_color.png'
-    st.image(image_path, caption='Adelboden Map Color', use_column_width=True)
+    #venue_data = data[(data['Venue'] == venue) & (data['Run'] == run)]
     
-    selected_venue = st.selectbox("Select a Venue", venues)
-    run_number = st.selectbox("Select Run Number", [1, 2])
+    #venue_data = venue_data.dropna(subset=["Longitude (°)", "Latitude (°)"])  # Ensure no missing values in Longitude or Latitude
+    venue_data_sorted = data
+    # Check if dataframe is empty after filtering and dropping missing values
+    if venue_data_sorted.empty:
+        st.error("Error: No data available for this venue and run.")
+        return
 
-    st.dataframe(data)
-    venue_data = data[(data['Venue'] == venue) & (data['Run'] == run)]
-    st.dataframe(venue_data)
-
-    # Sort by gate order
-    venue_data_sorted = venue_data.sort_values(by="Gate")
-
-    # Extract relevant columns
+    # Extract relevant columns and create GeoDataFrame
     latitude = venue_data_sorted["Latitude (°)"]
     longitude = venue_data_sorted["Longitude (°)"]
     geometry = [Point(xy) for xy in zip(longitude, latitude)]
     gdf = gpd.GeoDataFrame(venue_data_sorted, geometry=geometry)
-    gdf = gdf.set_crs(epsg=4326).to_crs(epsg=3857)
+    gdf.set_crs(epsg=4326, inplace=True)  # Set coordinate reference system
+    gdf.to_crs(epsg=3857, inplace=True)  # Convert to Web Mercator for mapping
 
-    # Buffer for zooming out
+    # Calculate buffer for improved map boundaries
     buffer_factor = 0.05
-    if gdf.is_empty:
-        st.error("Error: GeoDataFrame is empty.")
-        return
-
     minx, miny, maxx, maxy = gdf.total_bounds
-    if not np.isfinite([minx, miny, maxx, maxy]).all():
-        st.error("Error: Axis limits contain NaN or infinite values.")
-        return
-
     x_buffer = (maxx - minx) * buffer_factor
     y_buffer = (maxy - miny) * buffer_factor
 
-    # Color normalization
+    # Prepare colormap and normalization
     norm = Normalize(vmin=venue_data_sorted["relative_time_difference"].min(), vmax=venue_data_sorted["relative_time_difference"].max())
     colormap = plt.cm.RdYlGn
 
@@ -120,6 +106,7 @@ def plot_course_map(data, venue, run):
 
     # Displaying the plot in Streamlit
     st.pyplot(fig)
+    return
 
 # Define the plotting function with Plotly
 # Function to perform analysis and generate plots
@@ -157,20 +144,20 @@ def segment_analysis(graph_data):
     ).reset_index()
 
     # Plotting with standard error
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(3, 2))
     ax.bar(segment_summary['Segment'], segment_summary['mean_time_difference'], yerr=segment_summary['std_error'],
            capsize=5, color='skyblue', alpha=0.8)
     ax.set_xlabel('Course Segment')
-    ax.set_ylabel('Average Time Difference (seconds)')
-    ax.set_title('Average Time Loss by Course Segment with Standard Error')
+    ax.set_ylabel('Avg Time Diff (s)')
+    ax.set_title('Avg Time Loss by Segment')
     st.pyplot(fig)
 
     # Boxplot of time differences by segment
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(4, 3))
     sns.boxplot(x='Segment', y='time_difference', data=graph_data, palette='Set3', ax=ax)
     ax.set_xlabel('Course Segment')
-    ax.set_ylabel('Time Difference (seconds)')
-    ax.set_title('Boxplot of Time Differences by Course Segment')
+    ax.set_ylabel('Time Diff (s)')
+    ax.set_title('Time Differences by Segment')
     plt.tight_layout()
     st.pyplot(fig)
 
@@ -413,29 +400,23 @@ with st.sidebar:
             st.write(slalom_data)
             st.session_state['file2_uploaded'] = True
 
+    
+
     # Additional logic when both files are uploaded
     if st.session_state['file1_uploaded'] and st.session_state['file2_uploaded']:
-        venues = athlete_data['Venue'].unique()
-        selected_venue = st.selectbox("Select a Venue", venues)
-        run_number = st.selectbox("Select Run Number", [1, 2])
-
-        # Assuming merge_df is defined to merge athlete_data and slalom_data appropriately
-        graph_data = merge_df(athlete_data, slalom_data)
-        st.session_state['graph_data'] = graph_data
-
+        # Text input for user to specify what they want to analyze
+        st.subheader("Please Select your Analysis.")
         # Button to initiate slalom race analysis
         if st.button("Slalom Race Analyse"):
             st.session_state['analyse'] = "analyse"
-            st.session_state['selected_venue'] = selected_venue
-            st.session_state['run_number'] = run_number
+            
+        # Button to initiate slalom map analysis
+        if st.button("Slalom - Map"):
+            st.session_state['analyse'] = "map"
 
         # Button to initiate season analysis
         if st.button("Season Analysis"):
-            st.session_state['analyse'] = "season_analysis"
-
-        # Button to initiate season analysis
-        if st.button("Slalom - Map"):
-            st.session_state['analyse'] = "map"
+                st.session_state['analyse'] = "season_analysis"    
 
         # Button to trigger snow effect
         if st.button("Let it Snow!"):
@@ -443,6 +424,13 @@ with st.sidebar:
 
 # Plotting logic
 if st.session_state.get('analyse') == "analyse":
+    venues = athlete_data['Venue'].unique()
+    selected_venue = st.selectbox("Select a Venue", venues)
+    run_number = st.selectbox("Select Run Number", [1, 2])
+    st.session_state['selected_venue'] = selected_venue
+    st.session_state['run_number'] = run_number
+    graph_data = merge_df(athlete_data, slalom_data)
+    st.session_state['graph_data'] = graph_data
     fig = plot_relative_elevation_profile(st.session_state['graph_data'], st.session_state['selected_venue'], st.session_state['run_number'])
     st.plotly_chart(fig)
 
@@ -451,7 +439,18 @@ if st.session_state.get('analyse', 'init') == "init":
     st.subheader("Please upload the data files to begin the analysis.")
 
 if st.session_state.get('analyse') == "map":
-    plot_course_map(st.session_state['graph_data'], st.session_state['selected_venue'], st.session_state['run_number'])
+    #drop data without GPS coordinates
+    venue_data = slalom_data.dropna(subset=["Longitude (°)", "Latitude (°)"])  # Ensure no missing values in Longitude or Latitude
+    venue_data_sorted = venue_data.sort_values(by="Gate (Nr)")
+    venue_data_sorted = venue_data_sorted.sort_values(by= "Venue")
+    st.dataframe(venue_data_sorted)
+    venues = venue_data_sorted['Venue'].unique()
+    selected_venue = st.selectbox("Select a Venue", venues)
+    venue_data_sorted = venue_data[venue_data['Venue'] == selected_venue].sort_values(by="Gate (Nr)")
+    st.session_state['slalom_data'] = venue_data_sorted
+    st.session_state['selected_venue'] = selected_venue
+    st.dataframe(venue_data_sorted)
+    plot_course_map(st.session_state['slalom_data'], st.session_state['selected_venue'])
     st.subheader("map")
 
 if st.session_state.get('analyse') == "season_analysis":
