@@ -562,6 +562,8 @@ if st.session_state.get('analyse') == "map":
     slalom_map(venue_data_sorted)
 
 if st.session_state.get('analyse') == "season_analysis":
+    graph_data = merge_df(athlete_data, slalom_data)
+    st.session_state['graph_data'] = graph_data
     analyze_and_plot_features(st.session_state['graph_data'])
     segment_analysis(st.session_state['graph_data'])
     st.write("Season Analysis Complete")
