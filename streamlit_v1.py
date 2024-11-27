@@ -17,7 +17,6 @@ import cv2
 from tempfile import NamedTemporaryFile
 
 def merge_video_animation():  
-    
     def side_by_side_blend(frame1, frame2, height, width):
         # Ensure both frames are valid and have the same height
         if frame1 is None:
@@ -33,8 +32,9 @@ def merge_video_animation():
         return np.concatenate((frame1, frame2), axis=1)
 
     # Open the video files
-    cap1 = cv2.VideoCapture('Pfad_zu_Video1.mp4')
-    cap2 = cv2.VideoCapture('pfad')
+    global temp_video_run
+    cap1 = cv2.VideoCapture(temp_video_run.name)
+    cap2 = cv2.VideoCapture(temp_file_animation.name)
 
     # Ensure both videos are opened successfully
     if not cap1.isOpened() or not cap2.isOpened():
@@ -48,7 +48,9 @@ def merge_video_animation():
     fps = 60
 
     # Prepare output video writer with double width
-    out = cv2.VideoWriter('output_side_by_side.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (width * 2, height))
+    global temp_output_file
+    temp_output_file = NamedTemporaryFile(delete=False, suffix=".mp4")
+    out = cv2.VideoWriter(temp_output_file.name, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width * 2, height))
 
     # Process frames
     while True:
@@ -66,11 +68,10 @@ def merge_video_animation():
     cap1.release()
     cap2.release()
     out.release()
-    print("Done!")  
+    return 
 
-    return 1
 
-def run_animation(data):
+def run_animation(data,venue_name,date,run_number): 
     # Filter and prepare the data
     filtered_data = data[(data['Venue'] == 'Adelboden') & data['Latitude (°)'].notna() & data['Longitude (°)'].notna()].copy()
     filtered_data.loc[:, 'athlete_2_time'] = filtered_data['athlete_2_time'].fillna(0)
@@ -134,11 +135,11 @@ def run_animation(data):
     ani = FuncAnimation(fig, update, frames=num_frames, init_func=lambda: (blue_dot, time_text), blit=True)
 
     # Saving the animation temporarily for the Streamlit application
-    global temp_file
-    temp_file = NamedTemporaryFile(delete=False, suffix=".mp4")
+    global temp_file_animation
+    temp_file_animation = NamedTemporaryFile(delete=False, suffix=".mp4")
     Writer = FFMpegWriter(fps=desired_fps, metadata=dict(artist='Me'), codec='libx264')
-    ani.save(temp_file.name, writer=Writer)
-    temp_file.close()
+    ani.save(temp_file_animation.name, writer=Writer)
+    temp_file_animation.close()
 
     return 1
 
@@ -667,38 +668,54 @@ if st.session_state.get('analyse') == "analyse":
                     )
                     
 if st.session_state.get('analyse') == "animation":
+    venue_data = slalom_data.dropna(subset=["Longitude (°)", "Latitude (°)"])  # Ensure no missing values in Longitude or Latitude
+    venue_data_sorted = venue_data.sort_values(by="Gate (Nr)")
+    venue_data_sorted = venue_data_sorted.sort_values(by= "Venue")
+    venues = venue_data_sorted['Venue'].unique()
+    selected_venue = st.selectbox("Select a Venue", venues)
+    venue_data_sorted = venue_data[(venue_data['Venue'] == selected_venue)].sort_values(by="Gate (Nr)")
+    date = venue_data_sorted['Date'].unique()
+    selected_date = st.selectbox("Select a date", date)
+    run_number = st.selectbox("Select Run Number", [1, 2])
+    st.session_state['run_number'] = run_number
+    venue_data_sorted = venue_data[(venue_data['Date'] == selected_date)].sort_values(by="Gate (Nr)")
+    st.session_state['slalom_data'] = venue_data_sorted
+    st.session_state['selected_venue'] = selected_venue
+    st.session_state['selected_date'] = selected_date
     graph_data = merge_df(athlete_data, slalom_data)
-    run_animation(graph_data)
-    global temp_file
-    with open(temp_file.name, 'rb') as video_file:
+    st.session_state['graph_data'] = graph_data
+    run_animation(st.session_state['graph_data'], st.session_state['selected_venue'], st.session_state['selected_date'], st.session_state['run_number'])
+    
+    global temp_file_animation
+    with open(temp_file_animation.name, 'rb') as video_file:
         st.video(video_file.read())
     
-
     with st.expander("Upload Race Video", expanded=True):
         uploaded_video = st.file_uploader("Upload - Race Video", type=["mp4", "mov", "avi"], key="uploader_video")
         if uploaded_video is not None:
-            #video merge
-                # Button to initiate season analysis
+            # Display the uploaded video
             st.video(uploaded_video)
+            global temp_video_run
+            with NamedTemporaryFile(delete=False, suffix=".mp4") as temp_video_run:
+                temp_video_run.write(uploaded_video.read())
+                temp_video_path = temp_video_run.name
+                
             delay = st.slider("Select Video Delay (seconds)", min_value=0.0, max_value=10.0, value=0.0, step=0.1)
             if st.button("Analyse merge Video"):
                 st.session_state['analyse'] = "merge_Video"
                 # Save the uploaded video to a temporary file
-                with open("uploaded_video.mp4", "wb") as f:
-                    f.write(uploaded_video.read())
-                
-                merge_video_animation("uploaded_video.mp4")
-                
-                video_bytes = open(video_file, 'rb').read()
-                st.video(video_bytes)
+                merge_video_animation()
+                with open(temp_output_file.name, 'rb') as video_file:
+                    st.video(video_file.read())
+
                 # Add a download button for the video
-                st.download_button(
-                    label="Download Race Video",
-                    data=video_bytes,
-                    file_name="race_video.mp4",
-                    mime="video/mp4"
-                )
-            
+                with open(temp_output_file.name, 'rb') as video_file:
+                    st.download_button(
+                        label="Download Merged Video",
+                        data=video_file.read(),
+                        file_name="merged_video.mp4",
+                        mime="video/mp4"
+                    )
 
 # Use get() for safe access or check explicitly
 if st.session_state.get('analyse', 'init') == "init":
