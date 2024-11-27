@@ -18,7 +18,6 @@ filtered_data['cumulative_time'] = filtered_data['athlete_2_time'].cumsum()
 
 print(filtered_data)    
 
-
 # Calculate the total duration in seconds
 total_duration = filtered_data['cumulative_time'].iloc[-1]
 
@@ -37,7 +36,7 @@ fig, ax = plt.subplots()
 scat = ax.scatter(filtered_data['Longitude (°)'], filtered_data['Latitude (°)'], c=colors, s=100, edgecolor='k', alpha=0.8)
 ax.set_xlabel('')  # Remove x-axis label
 ax.set_ylabel('')  # Remove y-axis label
-ax.set_title('Adelboden Slalom 2024 - Meillard vs Raschner')
+ax.set_title('Animation - Racename')
 
 # Remove tick labels
 ax.set_xticklabels([])
@@ -74,7 +73,7 @@ ani = FuncAnimation(fig, update, frames=num_frames, init_func=lambda: (blue_dot,
 
 # Saving the animation
 Writer = FFMpegWriter(fps=desired_fps, metadata=dict(artist='Me'), codec='libx264')
-ani.save('Adelboden_Animation_blue.mp4', writer=Writer)
+ani.save('run_animation' + "racename" +'.mp4', writer=Writer)
 
 # Display the animation
 plt.legend()

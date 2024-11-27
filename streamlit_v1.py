@@ -13,9 +13,133 @@ from matplotlib.cm import ScalarMappable
 from shapely.geometry import Point
 import contextily as ctx
 import geopandas as gpd
+import cv2
+from tempfile import NamedTemporaryFile
 
+def merge_video_animation():  
+    
+    def side_by_side_blend(frame1, frame2, height, width):
+        # Ensure both frames are valid and have the same height
+        if frame1 is None:
+            frame1 = np.zeros((height, width, 3), dtype=np.uint8)
+        if frame2 is None:
+            frame2 = np.zeros((height, width, 3), dtype=np.uint8)
 
-def adelboden_animation():
+        # Resize frames to have the same height
+        frame1 = cv2.resize(frame1, (width, height))
+        frame2 = cv2.resize(frame2, (width, height))
+
+        # Concatenate frames side by side
+        return np.concatenate((frame1, frame2), axis=1)
+
+    # Open the video files
+    cap1 = cv2.VideoCapture('Pfad_zu_Video1.mp4')
+    cap2 = cv2.VideoCapture('pfad')
+
+    # Ensure both videos are opened successfully
+    if not cap1.isOpened() or not cap2.isOpened():
+        raise ValueError("One of the video files could not be opened")
+
+    # Get properties from video1
+    width = int(cap1.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap1.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    # Set the desired fps
+    fps = 60
+
+    # Prepare output video writer with double width
+    out = cv2.VideoWriter('output_side_by_side.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (width * 2, height))
+
+    # Process frames
+    while True:
+        ret1, frame1 = cap1.read()
+        ret2, frame2 = cap2.read()
+
+        if not ret1 and not ret2:
+            break  # End of both videos
+
+        # Apply the blend function
+        output_frame = side_by_side_blend(frame1 if ret1 else None, frame2 if ret2 else None, height, width)
+        out.write(output_frame)
+
+    # Release resources
+    cap1.release()
+    cap2.release()
+    out.release()
+    print("Done!")  
+
+    return 1
+
+def run_animation(data):
+    # Filter and prepare the data
+    filtered_data = data[(data['Venue'] == 'Adelboden') & data['Latitude (°)'].notna() & data['Longitude (°)'].notna()].copy()
+    filtered_data.loc[:, 'athlete_2_time'] = filtered_data['athlete_2_time'].fillna(0)
+
+    # Calculate cumulative time difference
+    filtered_data['cumulative_time'] = filtered_data['athlete_2_time'].cumsum()
+
+    print(filtered_data)    
+
+    # Calculate the total duration in seconds
+    total_duration = filtered_data['cumulative_time'].iloc[-1]
+
+    # Set desired frames per second
+    desired_fps = 60  # or 30
+    num_frames = int(total_duration * desired_fps)
+
+    # Normalize relative_time_difference for color mapping
+    norm = Normalize(vmin=filtered_data['relative_time_difference'].min(), vmax=filtered_data['relative_time_difference'].max())
+    cmap = plt.get_cmap('RdYlGn')
+    sm = ScalarMappable(cmap=cmap, norm=norm)
+    colors = sm.to_rgba(filtered_data['relative_time_difference'])
+
+    # Plotting setup
+    fig, ax = plt.subplots()
+    scat = ax.scatter(filtered_data['Longitude (°)'], filtered_data['Latitude (°)'], c=colors, s=100, edgecolor='k', alpha=0.8)
+    ax.set_xlabel('')  # Remove x-axis label
+    ax.set_ylabel('')  # Remove y-axis label
+    ax.set_title('Animation - Racename')
+
+    # Remove tick labels
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.tick_params(axis='both', which='both', length=0)  # Hide ticks
+
+    # Remove the border (spines)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    # Red dot and time annotation
+    blue_dot, = ax.plot([], [], 'bo', markersize=10)
+    time_text = ax.text(0.02, 0.95, '', transform=ax.transAxes, fontsize=12)
+
+    # Adjust the animation to match the cumulative time
+    def update(frame):
+        current_time = frame / desired_fps
+        actual_frame = np.searchsorted(filtered_data['cumulative_time'], current_time, side='right') - 1
+        blue_dot.set_data([filtered_data['Longitude (°)'].iloc[actual_frame]], [filtered_data['Latitude (°)'].iloc[actual_frame]])
+        time_difference = filtered_data['time_difference'].iloc[actual_frame]
+        time_info = f"Gate: {filtered_data['Gate'].iloc[actual_frame]}, Time Difference: {time_difference:.2f}s"
+        time_text.set_text(time_info)
+        time_text.set_position((0.98, 0.02))  # Set position to bottom right
+        time_text.set_ha('right')  # Align text to the right
+        # Set text color based on time_difference
+        if time_difference < 0:
+            time_text.set_color('red')
+        else:
+            time_text.set_color('green')
+        return blue_dot, time_text
+
+    # Animation setup
+    ani = FuncAnimation(fig, update, frames=num_frames, init_func=lambda: (blue_dot, time_text), blit=True)
+
+    # Saving the animation temporarily for the Streamlit application
+    global temp_file
+    temp_file = NamedTemporaryFile(delete=False, suffix=".mp4")
+    Writer = FFMpegWriter(fps=desired_fps, metadata=dict(artist='Me'), codec='libx264')
+    ani.save(temp_file.name, writer=Writer)
+    temp_file.close()
+
     return 1
 
 def summarize_data(data, venue, run):
@@ -488,6 +612,10 @@ with st.sidebar:
         # Text input for user to specify what they want to analyze
         st.subheader("Please Select your Analysis")
         # Button to initiate slalom race analysis
+        
+        if st.button("Run Video Animation"):
+            st.session_state['analyse'] = "animation"
+
         if st.button("Analyse Slalom Race"):
             st.session_state['analyse'] = "analyse"
             
@@ -517,7 +645,6 @@ if st.session_state.get('analyse') == "analyse":
     if selected_venue.lower() == 'adelboden' and run_number == 2:
         venue_data_sorted = graph_data[(graph_data['Venue'] == selected_venue)].sort_values(by="Gate")
         adelboden_plot_course_map(venue_data_sorted)
-        adelboden_animation()
         # Video file uploader
         with st.expander("Upload Race Video", expanded=True):
             uploaded_video = st.file_uploader("Upload - Race Video", type=["mp4", "mov", "avi"], key="uploader_video")
@@ -539,7 +666,39 @@ if st.session_state.get('analyse') == "analyse":
                         mime="video/mp4"
                     )
                     
+if st.session_state.get('analyse') == "animation":
+    graph_data = merge_df(athlete_data, slalom_data)
+    run_animation(graph_data)
+    global temp_file
+    with open(temp_file.name, 'rb') as video_file:
+        st.video(video_file.read())
+    
 
+    with st.expander("Upload Race Video", expanded=True):
+        uploaded_video = st.file_uploader("Upload - Race Video", type=["mp4", "mov", "avi"], key="uploader_video")
+        if uploaded_video is not None:
+            #video merge
+                # Button to initiate season analysis
+            st.video(uploaded_video)
+            delay = st.slider("Select Video Delay (seconds)", min_value=0.0, max_value=10.0, value=0.0, step=0.1)
+            if st.button("Analyse merge Video"):
+                st.session_state['analyse'] = "merge_Video"
+                # Save the uploaded video to a temporary file
+                with open("uploaded_video.mp4", "wb") as f:
+                    f.write(uploaded_video.read())
+                
+                merge_video_animation("uploaded_video.mp4")
+                
+                video_bytes = open(video_file, 'rb').read()
+                st.video(video_bytes)
+                # Add a download button for the video
+                st.download_button(
+                    label="Download Race Video",
+                    data=video_bytes,
+                    file_name="race_video.mp4",
+                    mime="video/mp4"
+                )
+            
 
 # Use get() for safe access or check explicitly
 if st.session_state.get('analyse', 'init') == "init":
