@@ -85,7 +85,7 @@ def run_animation(data,venue_name,date,run_number):
     total_duration = filtered_data['cumulative_time'].iloc[-1]
 
     # Set desired frames per second
-    desired_fps = 60  # or 30
+    desired_fps = 10  # or 30
     num_frames = int(total_duration * desired_fps)
 
     # Normalize relative_time_difference for color mapping
