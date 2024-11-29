@@ -16,7 +16,7 @@ import geopandas as gpd
 import cv2
 from tempfile import NamedTemporaryFile
 
-def merge_video_animation():  
+def merge_video_animation(delay):  
     def side_by_side_blend(frame1, frame2, height, width):
         # Ensure both frames are valid and have the same height
         if frame1 is None:
@@ -52,10 +52,19 @@ def merge_video_animation():
     temp_output_file = NamedTemporaryFile(delete=False, suffix=".mp4")
     out = cv2.VideoWriter(temp_output_file.name, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width * 2, height))
 
+    # Calculate the delay in frames
+    delay_frames = int(delay * fps)
+
     # Process frames
+    frame_count = 0
     while True:
         ret1, frame1 = cap1.read()
-        ret2, frame2 = cap2.read()
+        
+        if frame_count >= delay_frames:
+            ret2, frame2 = cap2.read()
+        else:
+            frame2 = None
+            ret2 = True  # Continue processing until delay is met
 
         if not ret1 and not ret2:
             break  # End of both videos
@@ -63,6 +72,8 @@ def merge_video_animation():
         # Apply the blend function
         output_frame = side_by_side_blend(frame1 if ret1 else None, frame2 if ret2 else None, height, width)
         out.write(output_frame)
+
+        frame_count += 1
 
     # Release resources
     cap1.release()
@@ -79,13 +90,11 @@ def run_animation(data,venue_name,date,run_number):
     # Calculate cumulative time difference
     filtered_data['cumulative_time'] = filtered_data['athlete_2_time'].cumsum()
 
-    print(filtered_data)    
-
     # Calculate the total duration in seconds
     total_duration = filtered_data['cumulative_time'].iloc[-1]
 
     # Set desired frames per second
-    desired_fps = 10  # or 30
+    desired_fps = 60  # or 30
     num_frames = int(total_duration * desired_fps)
 
     # Normalize relative_time_difference for color mapping
@@ -578,7 +587,7 @@ def plot_relative_elevation_profile(data, venue_name, run_number):
 
 # App title
 st.set_page_config(layout="wide")
-st.title("Slalom Analysis")
+st.title("Race Analysis")
 
 # Initialization of the session state with default values
 if 'file1_uploaded' not in st.session_state:
@@ -701,12 +710,13 @@ if st.session_state.get('analyse') == "animation":
                 temp_video_path = temp_video_run.name
                 
             delay = st.slider("Select Video Delay (seconds)", min_value=0.0, max_value=10.0, value=0.0, step=0.1)
+            st.session_state["delay"] = delay
             if st.button("Analyse merge Video"):
                 st.session_state['analyse'] = "merge_Video"
                 # Save the uploaded video to a temporary file
-                merge_video_animation()
-                with open(temp_output_file.name, 'rb') as video_file:
-                    st.video(video_file.read())
+                merge_video_animation(st.session_state["delay"])
+                #with open(temp_output_file.name, 'rb') as video_file:
+                    #st.video(video_file.read())
 
                 # Add a download button for the video
                 with open(temp_output_file.name, 'rb') as video_file:
